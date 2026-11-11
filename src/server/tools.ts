@@ -22,6 +22,19 @@ export interface BridgeLike {
 }
 
 const nodeIdSchema = z.string().min(1).optional();
+
+/**
+ * Workflow guidance attached to get_plugin_status so every MCP client learns the
+ * intended usage on its first call, without any client-side skill or setup.
+ * Kept in English on purpose: it targets models, like the tool descriptions.
+ */
+const usageHints: readonly string[] = [
+  'Design-to-code flow: get_screenshot for a visual overview first, then get_design_context for structure, then get_variable_defs/get_style_defs for exact tokens, then export_node for assets.',
+  'get_screenshot returns an image for visual reference; get_design_context returns structured data for writing code.',
+  'Omit nodeId to use the single selected node. With no or multiple nodes selected, call get_document (page list) and find_nodes (name/type search) to locate a node ID first.',
+  'The plugin must be running in the Figma desktop app; its window may be collapsed but not closed. If nothing is connected, ask the user to open the plugin.',
+  'When several files are connected, pass the fileKey from this status to target one file; otherwise the most recently active file is used.',
+];
 const fileKeySchema = z.string().min(1).max(100).optional()
   .describe('Optional key of the Figma file to target. Omit to use the most recently active file; see get_plugin_status.');
 
@@ -90,7 +103,7 @@ export function registerTools(server: McpServer, bridge: BridgeLike): void {
       description: 'Check which Figma files are connected through the local desktop plugin, which file is active, and the current selection in it.',
       inputSchema: {},
     },
-    async () => textResult({ bridge: bridgeOrigin, ...await bridge.getStatus() }),
+    async () => textResult({ bridge: bridgeOrigin, ...await bridge.getStatus(), usageHints }),
   );
 
   server.registerTool(

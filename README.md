@@ -68,6 +68,8 @@ Each client starts its own MCP process and reuses the same local bridge. Do not 
 
 The plugin shows the current selection live. With no selection or multiple layers selected, copy is disabled. The copied prompt includes the node ID and file key, so agents can pin the exact file on their first call.
 
+`get_plugin_status` also returns `usageHints`: workflow guidance (screenshot first, then structure, then tokens, then exports; how to pick tools and locate nodes) that tells any MCP client how to use the tools well, without a client-side skill.
+
 The UI language follows your system locale (Chinese for `zh*`, English otherwise) and can be switched with the toggle in the plugin header; the choice is remembered. The copied prompt template and runtime messages follow the same language.
 
 Multiple files can be connected at once: run the plugin in each open file and the bridge keeps a separate session per file (keyed by the Figma file key). `get_plugin_status` lists every connected file with its `fileKey`; the most recently active file is the default target for tools. Tools that read a file accept an optional `fileKey` argument to pin the exact file, so designs are never read from the wrong one:

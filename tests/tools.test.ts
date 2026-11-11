@@ -157,6 +157,7 @@ describe('tool registration and status', () => {
       connected: boolean;
       activeFileKey: string;
       files: Array<{ fileKey: string; fileName: string; selectionCount: number }>;
+      usageHints: string[];
     }>(await client.callTool({ name: 'get_plugin_status', arguments: {} }));
     expect(status.bridge).toBe('http://localhost:3846');
     expect(status.connected).toBe(true);
@@ -165,6 +166,8 @@ describe('tool registration and status', () => {
     expect(status.files[0].fileKey).toBe('file-key-1');
     expect(status.files[0].fileName).toBe('测试文件');
     expect(status.files[0].selectionCount).toBe(1);
+    expect(status.usageHints.length).toBeGreaterThanOrEqual(4);
+    expect(status.usageHints.join('\n')).toContain('get_screenshot');
   });
 
   it('get_selection passes the plugin result through', async () => {
