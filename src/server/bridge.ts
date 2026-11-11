@@ -18,6 +18,9 @@ const commandNames: readonly PluginCommandName[] = [
   'get_selection',
   'get_design_context',
   'get_variable_defs',
+  'get_style_defs',
+  'get_document',
+  'find_nodes',
   'export_node',
 ];
 

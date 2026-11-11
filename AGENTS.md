@@ -15,7 +15,7 @@ This file defines how the repository is developed and verified. Installation, ag
 
 - `src/plugin/code.ts`: plugin orchestration — selection sync, prompt entry point, polling and command forwarding.
 - `src/plugin/ui.html`: standalone plugin UI; no frontend framework, no external resources.
-- `src/plugin/commands.ts`: plugin command execution (selection, structure, variables, exports) with an injected Figma context.
+- `src/plugin/commands.ts`: plugin command execution (selection, structure, variables, styles, document/search, exports) with an injected Figma context.
 - `src/plugin/serialize.ts`: serialization of the design structure and nodes.
 - `src/plugin/prompt.ts`, `src/plugin/export.ts`: plugin pure helpers (prompt template, base64 encoding, export scale computation).
 - `src/server/index.ts`: MCP service entry — assembles the bridge, tool registration and stdio transport.
@@ -81,6 +81,7 @@ pnpm install:local             # Build and install into the fixed local director
 - Update the UI promptly after `selectionchange` and `currentpagechange`.
 - Stay connected and copyable while collapsed; hiding or closing the plugin window is not a substitute for collapsing.
 - Keep `Cmd/Ctrl + Shift + C` working and keep the manual copy fallback available when automatic copy fails.
+- The manifest uses `documentAccess: "dynamic-page"`: tools that touch other pages (`find_nodes`, `get_document`) must `await page.loadAsync()` before reading a page's children; the current page and `getNodeByIdAsync` are always available.
 
 ## Local data and security
 

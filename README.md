@@ -66,7 +66,7 @@ Each client starts its own MCP process and reuses the same local bridge. Do not 
 2. Click "Copy node prompt", or press `Cmd/Ctrl + Shift + C`. Copy also works while collapsed.
 3. Paste the prompt straight into any agent configured with `figma-local`.
 
-The plugin shows the current selection live. With no selection or multiple layers selected, copy is disabled.
+The plugin shows the current selection live. With no selection or multiple layers selected, copy is disabled. The copied prompt includes the node ID and file key, so agents can pin the exact file on their first call.
 
 The UI language follows your system locale (Chinese for `zh*`, English otherwise) and can be switched with the toggle in the plugin header; the choice is remembered. The copied prompt template and runtime messages follow the same language.
 
@@ -79,9 +79,12 @@ Multiple files can be connected at once: run the plugin in each open file and th
 MCP tools:
 
 - `get_plugin_status`: list connected files, the active file key and the current selection in it.
+- `get_document`: list all pages with node counts and local resource counts.
 - `get_selection`: read the current selection.
+- `find_nodes`: search nodes by name substring and/or type, across the file or one page.
 - `get_design_context`: read layout, text, styles, components and variable bindings.
 - `get_variable_defs`: read local variable collections.
+- `get_style_defs`: read local paint, text, effect and grid styles.
 - `get_screenshot`: get a PNG screenshot of a node.
 - `export_node`: export a node as PNG, SVG, JPG or PDF.
 

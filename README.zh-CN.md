@@ -66,7 +66,7 @@ claude mcp add --scope user figma-local -- figma-local-mcp
 2. 点击"复制节点 Prompt"，或按 `Cmd/Ctrl + Shift + C`。收起状态下也可以复制。
 3. 将 Prompt 直接粘贴给已配置 `figma-local` 的 Agent。
 
-插件会实时显示当前选区。未选中图层或选中多个图层时，复制按钮不可用。
+插件会实时显示当前选区。未选中图层或选中多个图层时，复制按钮不可用。复制的 Prompt 包含节点 ID 和文件 fileKey，Agent 第一次调用就能锁定正确的文件。
 
 界面语言默认跟随系统（`zh*` 为中文，否则英文），可通过插件头部的按钮切换并记忆；复制的 Prompt 模板与运行时提示也跟随该语言。
 
@@ -79,9 +79,12 @@ claude mcp add --scope user figma-local -- figma-local-mcp
 MCP 提供以下工具：
 
 - `get_plugin_status`：列出已连接的文件、当前活跃文件 key 及其中的选区。
+- `get_document`：列出所有页面及节点数、本地资源数量。
 - `get_selection`：读取当前选区。
+- `find_nodes`：按名称子串和/或类型搜索节点，可限定单页。
 - `get_design_context`：读取布局、文本、样式、组件和变量绑定。
 - `get_variable_defs`：读取本地变量集合。
+- `get_style_defs`：读取本地颜色、文字、效果和网格样式。
 - `get_screenshot`：获取节点 PNG 截图。
 - `export_node`：将节点导出为 PNG、SVG、JPG 或 PDF。
 

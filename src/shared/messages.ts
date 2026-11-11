@@ -1,14 +1,16 @@
 export type Locale = 'zh' | 'en';
 
 const en = {
-  promptTemplate: (name: string, nodeId: string): string =>
-    `Use figma-local to analyze the Figma node "${name}".\nnodeId: ${nodeId}\n\nCall get_design_context and get_screenshot, then analyze this node's layout, text, styles, components and variable bindings.\nRead-only: do not modify the Figma file.`,
+  promptTemplate: (name: string, nodeId: string, fileKey: string): string =>
+    `Use figma-local to analyze the Figma node "${name}".\nnodeId: ${nodeId}\nfileKey: ${fileKey}\n\nCall get_design_context and get_screenshot, then analyze this node's layout, text, styles, components and variable bindings.\nRead-only: do not modify the Figma file.`,
   promptErrorMulti: 'Select only one layer, then copy.',
   promptErrorNone: 'Select a layer in Figma first.',
   viewSaveNotice: 'View switched, but the preference could not be saved.',
   localeSaveNotice: 'Language switched, but the preference could not be saved.',
   selectFrameFirst: 'Select a Frame or layer in Figma first.',
   selectOnlyOne: 'Select only one Frame or layer.',
+  findNodesCriteria: 'Provide a query and/or types to search for.',
+  pageNotFound: (pageId: string): string => `Page ${pageId} not found.`,
   nodeNotFound: (nodeId: string): string => `Node ${nodeId} not found.`,
   notCanvasNode: 'Provide the node ID of a Frame or canvas layer, not a page or document.',
   exportTooLarge: (bytes: number, max: number): string =>
@@ -41,14 +43,16 @@ const en = {
 export type MessageCatalog = typeof en;
 
 const zh: MessageCatalog = {
-  promptTemplate: (name, nodeId): string =>
-    `使用 figma-local 分析 Figma 节点「${name}」。\nnodeId: ${nodeId}\n\n调用 get_design_context 和 get_screenshot，分析该节点的布局、文本、样式、组件和变量绑定。\n只读，不要修改 Figma 文件。`,
+  promptTemplate: (name, nodeId, fileKey): string =>
+    `使用 figma-local 分析 Figma 节点「${name}」。\nnodeId: ${nodeId}\nfileKey: ${fileKey}\n\n调用 get_design_context 和 get_screenshot，分析该节点的布局、文本、样式、组件和变量绑定。\n只读，不要修改 Figma 文件。`,
   promptErrorMulti: '请只选中一个图层后再复制。',
   promptErrorNone: '请先在 Figma 中选中一个图层。',
   viewSaveNotice: '视图已切换，但无法保存窗口偏好。',
   localeSaveNotice: '语言已切换，但无法保存偏好。',
   selectFrameFirst: '请先在 Figma 中选中一个 Frame 或图层。',
   selectOnlyOne: '请只选中一个 Frame 或图层。',
+  findNodesCriteria: '请提供搜索条件：query 和/或 types。',
+  pageNotFound: (pageId): string => `找不到页面 ${pageId}。`,
   nodeNotFound: (nodeId): string => `找不到节点 ${nodeId}。`,
   notCanvasNode: '请提供 Frame 或其他画布图层的节点 ID，而不是页面或文档。',
   exportTooLarge: (bytes, max): string =>

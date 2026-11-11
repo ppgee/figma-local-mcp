@@ -27,11 +27,24 @@ interface CtxOptions {
   nodes?: Record<string, any>;
   variables?: any[];
   collections?: any[];
+  pages?: any[];
+  paintStyles?: any[];
+  textStyles?: any[];
+  effectStyles?: any[];
+  gridStyles?: any[];
 }
 
 function makeCtx(options: CtxOptions = {}): FigmaContext {
   return {
-    root: { name: '测试文件' },
+    root: {
+      name: '测试文件',
+      children: options.pages ?? [{
+        id: '0:1',
+        name: 'Page 1',
+        loadAsync: async () => {},
+        children: options.selection ?? [makeNode()],
+      }],
+    },
     getNodeByIdAsync: async (id: string) => options.nodes?.[id] ?? null,
     currentPage: {
       id: '0:1',
@@ -42,6 +55,10 @@ function makeCtx(options: CtxOptions = {}): FigmaContext {
       getLocalVariablesAsync: async () => options.variables ?? [],
       getLocalVariableCollectionsAsync: async () => options.collections ?? [],
     },
+    getLocalPaintStylesAsync: async () => options.paintStyles ?? [],
+    getLocalTextStylesAsync: async () => options.textStyles ?? [],
+    getLocalEffectStylesAsync: async () => options.effectStyles ?? [],
+    getLocalGridStylesAsync: async () => options.gridStyles ?? [],
   } as unknown as FigmaContext;
 }
 
@@ -217,5 +234,139 @@ describe('executeCommand', () => {
 
   it('errors on unknown commands', async () => {
     await expect(executeCommand(makeCtx(), FILE_KEY, PLUGIN_VERSION, 'en', command('run_js'))).rejects.toThrow(/Unsupported command: run_js/);
+  });
+});
+
+describe('find_nodes', () => {
+  const pages = [
+    {
+      id: '0:1',
+      name: 'Page 1',
+      loadAsync: async () => {},
+      children: [
+        {
+          id: '1:1', name: '首页 Header', type: 'FRAME',
+          children: [
+            { id: '1:2', name: '标题文字', type: 'TEXT' },
+            { id: '1:3', name: 'Header 组件', type: 'INSTANCE' },
+          ],
+        },
+      ],
+    },
+    {
+      id: '0:2',
+      name: '组件库',
+      loadAsync: async () => {},
+      children: [
+        { id: '2:1', name: 'Button/Main', type: 'COMPONENT' },
+        { id: '2:2', name: 'Button/Second', type: 'COMPONENT' },
+      ],
+    },
+  ];
+
+  it('matches names case-insensitively across all pages', async () => {
+    const result = await executeCommand(
+      makeCtx({ pages }), FILE_KEY, PLUGIN_VERSION, 'en', command('find_nodes', { query: 'button' }),
+    ) as Record<string, any>;
+    expect(result.matchCount).toBe(2);
+    expect(result.returned).toBe(2);
+    expect(result.truncated).toBe(false);
+    expect(result.matches.map((match: any) => match.id)).toEqual(['2:1', '2:2']);
+    expect(result.matches[0]).toMatchObject({
+      id: '2:1', name: 'Button/Main', type: 'COMPONENT', pageId: '0:2', pageName: '组件库',
+    });
+  });
+
+  it('filters by type (normalized) and combines with the query as AND', async () => {
+    const ctx = makeCtx({ pages });
+    const byType = await executeCommand(ctx, FILE_KEY, PLUGIN_VERSION, 'en', command('find_nodes', { types: ['component'] })) as Record<string, any>;
+    expect(byType.matchCount).toBe(2);
+    const combined = await executeCommand(ctx, FILE_KEY, PLUGIN_VERSION, 'en', command('find_nodes', { query: 'second', types: ['COMPONENT'] })) as Record<string, any>;
+    expect(combined.matchCount).toBe(1);
+    expect(combined.matches[0].id).toBe('2:2');
+  });
+
+  it('limits the search to one page and reports unknown pages', async () => {
+    const ctx = makeCtx({ pages });
+    const paged = await executeCommand(ctx, FILE_KEY, PLUGIN_VERSION, 'en', command('find_nodes', { query: 'button', pageId: '0:2' })) as Record<string, any>;
+    expect(paged.matchCount).toBe(2);
+    await expect(executeCommand(ctx, FILE_KEY, PLUGIN_VERSION, 'en', command('find_nodes', { query: 'x', pageId: '9:9' })))
+      .rejects.toThrow(/Page 9:9 not found/);
+  });
+
+  it('truncates results while counting every match', async () => {
+    const result = await executeCommand(
+      makeCtx({ pages }), FILE_KEY, PLUGIN_VERSION, 'en', command('find_nodes', { query: 'button', maxResults: 1 }),
+    ) as Record<string, any>;
+    expect(result.returned).toBe(1);
+    expect(result.matchCount).toBe(2);
+    expect(result.truncated).toBe(true);
+  });
+
+  it('requires a query and/or types', async () => {
+    await expect(executeCommand(makeCtx({ pages }), FILE_KEY, PLUGIN_VERSION, 'en', command('find_nodes', {})))
+      .rejects.toThrow(/query and\/or types/);
+  });
+});
+
+describe('get_document', () => {
+  it('lists pages with recursive node counts and resource counts', async () => {
+    const pages = [{
+      id: '0:1', name: 'Page 1', loadAsync: async () => {},
+      children: [{ id: '1:1', name: 'F', type: 'FRAME', children: [{ id: '1:2', name: 'T', type: 'TEXT' }] }],
+    }];
+    const result = await executeCommand(
+      makeCtx({
+        pages,
+        variables: [{ id: 'v1' }],
+        collections: [{ id: 'c1' }],
+        paintStyles: [{ id: 's1' }],
+        textStyles: [{ id: 's2' }, { id: 's3' }],
+      }),
+      FILE_KEY, PLUGIN_VERSION, 'en', command('get_document'),
+    ) as Record<string, any>;
+    expect(result.fileName).toBe('测试文件');
+    expect(result.fileKey).toBe(FILE_KEY);
+    expect(result.pages).toEqual([{ id: '0:1', name: 'Page 1', nodeCount: 2 }]);
+    expect(result.counts).toEqual({
+      variables: 1,
+      variableCollections: 1,
+      paintStyles: 1,
+      textStyles: 2,
+      effectStyles: 0,
+      gridStyles: 0,
+    });
+  });
+});
+
+describe('get_style_defs', () => {
+  it('summarizes each style category with truncation and full definitions', async () => {
+    const paintStyles = [
+      { id: 's1', name: '主色', key: 'k1', description: '', remote: false, paints: [{ type: 'SOLID', color: { r: 1, g: 0, b: 0 } }] },
+      { id: 's2', name: '背景', key: 'k2', description: 'bg', remote: true, paints: [] },
+    ];
+    const textStyles = [{
+      id: 't1', name: '标题', key: 'k3', description: '', remote: false,
+      fontName: { family: 'Inter', style: 'Bold' }, fontSize: 16, fontWeight: 700,
+      lineHeight: { value: 24, unit: 'PIXELS' }, letterSpacing: 0, paragraphSpacing: 0, paragraphIndent: 0,
+    }];
+    const effectStyles = [{ id: 'e1', name: '阴影', key: 'k4', description: '', remote: false, effects: [{ type: 'DROP_SHADOW' }] }];
+    const gridStyles = [{ id: 'g1', name: '栅格', key: 'k5', description: '', remote: false, layoutGrids: [{ pattern: 'GRID' }] }];
+    const result = await executeCommand(
+      makeCtx({ paintStyles, textStyles, effectStyles, gridStyles }),
+      FILE_KEY, PLUGIN_VERSION, 'en', command('get_style_defs', { maxStyles: 1 }),
+    ) as Record<string, any>;
+
+    expect(result.paintStyles.total).toBe(2);
+    expect(result.paintStyles.returned).toBe(1);
+    expect(result.paintStyles.truncated).toBe(true);
+    expect(result.paintStyles.list[0]).toMatchObject({
+      id: 's1', name: '主色', key: 'k1', remote: false,
+      paints: [{ type: 'SOLID', color: { r: 1, g: 0, b: 0 } }],
+    });
+    expect(result.textStyles.total).toBe(1);
+    expect(result.textStyles.list[0]).toMatchObject({ fontName: { family: 'Inter', style: 'Bold' }, fontSize: 16 });
+    expect(result.effectStyles.list[0]).toMatchObject({ effects: [{ type: 'DROP_SHADOW' }] });
+    expect(result.gridStyles.list[0]).toMatchObject({ layoutGrids: [{ pattern: 'GRID' }] });
   });
 });

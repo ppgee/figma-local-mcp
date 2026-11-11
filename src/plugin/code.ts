@@ -34,7 +34,7 @@ function emitStatus(): void {
     type: 'status',
     connected,
     ...status,
-    prompt: status.selectedNode ? createNodePrompt(status.selectedNode, uiLocale) : '',
+    prompt: status.selectedNode ? createNodePrompt(status.selectedNode, fileKey, uiLocale) : '',
   });
 }
 
@@ -161,7 +161,7 @@ figma.ui.onmessage = (message: { type?: string; requestId?: number; collapsed?: 
         type: 'prompt',
         requestId: message.requestId,
         node: status.selectedNode,
-        prompt: createNodePrompt(status.selectedNode, uiLocale),
+        prompt: createNodePrompt(status.selectedNode, fileKey, uiLocale),
       });
       break;
     }

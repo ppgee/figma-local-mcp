@@ -2,6 +2,15 @@
 
 Notable changes to this project. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows SemVer. On release, `release.yml` extracts the matching section as the GitHub Release body.
 
+## [0.6.0] - 2026-11-11
+
+### Added
+
+- `find_nodes` tool: search the whole file (or one page) for nodes by name substring and/or node type, returning matching node IDs with their pages — no longer limited by the `get_design_context` node budget on large files.
+- `get_document` tool: list all pages with recursive node counts plus local resource counts (variables, collections, paint/text/effect/grid styles).
+- `get_style_defs` tool: read local paint, text, effect and grid styles with their full definitions (paints, font properties, effects, layout grids) — the style counterpart of `get_variable_defs`, useful for design token extraction.
+- The copied node prompt now includes the `fileKey`, so agents can pin the right file on their first call when several files are connected.
+
 ## [0.5.0] - 2026-11-11
 
 ### Added

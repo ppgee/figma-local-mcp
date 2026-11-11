@@ -3,30 +3,34 @@ import { createNodePrompt } from '../src/plugin/prompt';
 import { base64Encode, computeExportScale } from '../src/plugin/export';
 
 describe('createNodePrompt', () => {
-  it('includes the node name, nodeId and template structure', () => {
-    const prompt = createNodePrompt({ id: '1830:2591', name: '首页' });
+  const FILE_KEY = 'test-file-key';
+
+  it('includes the node name, nodeId, fileKey and template structure', () => {
+    const prompt = createNodePrompt({ id: '1830:2591', name: '首页' }, FILE_KEY);
     expect(prompt).toContain('"首页"');
     expect(prompt).toContain('nodeId: 1830:2591');
+    expect(prompt).toContain('fileKey: test-file-key');
     expect(prompt).toContain('get_design_context');
     expect(prompt).toContain('get_screenshot');
     expect(prompt).toContain('Read-only');
   });
 
   it('collapses consecutive whitespace into single spaces', () => {
-    const prompt = createNodePrompt({ id: '1:1', name: '  添加\n\t文件夹  后  ' });
+    const prompt = createNodePrompt({ id: '1:1', name: '  添加\n\t文件夹  后  ' }, FILE_KEY);
     expect(prompt).toContain('"添加 文件夹 后"');
   });
 
   it('generates the Chinese template for the zh locale', () => {
-    const prompt = createNodePrompt({ id: '1830:2591', name: '首页' }, 'zh');
+    const prompt = createNodePrompt({ id: '1830:2591', name: '首页' }, FILE_KEY, 'zh');
     expect(prompt).toContain('「首页」');
     expect(prompt).toContain('nodeId: 1830:2591');
+    expect(prompt).toContain('fileKey: test-file-key');
     expect(prompt).toContain('只读');
-    expect(createNodePrompt({ id: '1:1', name: '   ' }, 'zh')).toContain('「未命名节点」');
+    expect(createNodePrompt({ id: '1:1', name: '   ' }, FILE_KEY, 'zh')).toContain('「未命名节点」');
   });
 
   it('falls back to Untitled node for empty names', () => {
-    const prompt = createNodePrompt({ id: '1:1', name: '   ' });
+    const prompt = createNodePrompt({ id: '1:1', name: '   ' }, FILE_KEY);
     expect(prompt).toContain('"Untitled node"');
   });
 });

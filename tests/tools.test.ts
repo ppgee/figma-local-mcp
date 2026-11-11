@@ -119,17 +119,34 @@ function payload(overrides: Partial<ExportPayload>): ExportPayload {
 }
 
 describe('tool registration and status', () => {
-  it('registers the six read-only tools', async () => {
+  it('registers the nine read-only tools', async () => {
     await connect(new FakeBridge());
     const listed = await client.listTools();
     expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
       'export_node',
+      'find_nodes',
       'get_design_context',
+      'get_document',
       'get_plugin_status',
       'get_screenshot',
       'get_selection',
+      'get_style_defs',
       'get_variable_defs',
     ]);
+  });
+
+  it('forwards the document, search and style tools with defaults', async () => {
+    const bridge = new FakeBridge();
+    await connect(bridge);
+
+    await client.callTool({ name: 'find_nodes', arguments: { query: 'button' } });
+    expect(bridge.calls[0]).toMatchObject({ name: 'find_nodes', args: { query: 'button', maxResults: 50 } });
+
+    await client.callTool({ name: 'get_document', arguments: {} });
+    expect(bridge.calls[1]).toMatchObject({ name: 'get_document', args: {} });
+
+    await client.callTool({ name: 'get_style_defs', arguments: { maxStyles: 10 } });
+    expect(bridge.calls[2]).toMatchObject({ name: 'get_style_defs', args: { maxStyles: 10 } });
   });
 
   it('get_plugin_status returns the bridge origin and the connected files', async () => {
@@ -205,6 +222,9 @@ describe('parameter validation and forwarding', () => {
 
     const fileKey = (await client.callTool({ name: 'get_selection', arguments: { fileKey: '' } })) as ToolText;
     expect(fileKey.isError).toBe(true);
+
+    const emptyTypes = (await client.callTool({ name: 'find_nodes', arguments: { types: [] } })) as ToolText;
+    expect(emptyTypes.isError).toBe(true);
   });
 
   it('returns isError with the original message when bridge.call throws', async () => {

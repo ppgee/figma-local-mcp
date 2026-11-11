@@ -94,6 +94,19 @@ export function registerTools(server: McpServer, bridge: BridgeLike): void {
   );
 
   server.registerTool(
+    'get_document',
+    {
+      title: 'Get Figma document overview',
+      description: 'List all pages with node counts and the local resource counts (variables, collections, styles) of the open Figma file.',
+      inputSchema: { fileKey: fileKeySchema },
+    },
+    (args) => handleTool(async () => {
+      const { fileKey, ...pluginArgs } = args;
+      return textResult(await bridge.call('get_document', pluginArgs, undefined, fileKey));
+    }),
+  );
+
+  server.registerTool(
     'get_selection',
     {
       title: 'Get Figma selection',
@@ -103,6 +116,26 @@ export function registerTools(server: McpServer, bridge: BridgeLike): void {
     (args) => handleTool(async () => {
       const { fileKey, ...pluginArgs } = args;
       return textResult(await bridge.call('get_selection', pluginArgs, undefined, fileKey));
+    }),
+  );
+
+  server.registerTool(
+    'find_nodes',
+    {
+      title: 'Find Figma nodes',
+      description: 'Search the whole file (or one page) for nodes by name substring and/or node type, returning matching node IDs with their pages.',
+      inputSchema: {
+        query: z.string().min(1).optional().describe('Case-insensitive substring to match node names.'),
+        types: z.array(z.string().min(1)).min(1).max(20).optional()
+          .describe('Node types to match (AND with query), e.g. ["FRAME", "INSTANCE", "TEXT"].'),
+        pageId: z.string().min(1).optional().describe('Optional page ID to limit the search to one page (see get_document).'),
+        maxResults: z.number().int().min(1).max(500).default(50),
+        fileKey: fileKeySchema,
+      },
+    },
+    (args) => handleTool(async () => {
+      const { fileKey, ...pluginArgs } = args;
+      return textResult(await bridge.call('find_nodes', pluginArgs, undefined, fileKey));
     }),
   );
 
@@ -137,6 +170,22 @@ export function registerTools(server: McpServer, bridge: BridgeLike): void {
     (args) => handleTool(async () => {
       const { fileKey, ...pluginArgs } = args;
       return textResult(await bridge.call('get_variable_defs', pluginArgs, undefined, fileKey));
+    }),
+  );
+
+  server.registerTool(
+    'get_style_defs',
+    {
+      title: 'Get local Figma styles',
+      description: 'Read local paint, text, effect and grid styles from the open Figma file (useful for design tokens).',
+      inputSchema: {
+        maxStyles: z.number().int().min(1).max(2000).default(200),
+        fileKey: fileKeySchema,
+      },
+    },
+    (args) => handleTool(async () => {
+      const { fileKey, ...pluginArgs } = args;
+      return textResult(await bridge.call('get_style_defs', pluginArgs, undefined, fileKey));
     }),
   );
 
