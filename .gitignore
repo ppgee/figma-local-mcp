@@ -1,0 +1,9 @@
+node_modules/
+dist/
+exports/
+.env
+.env.*
+!.env.example
+.figma-local-mcp.json
+*.log
+.DS_Store

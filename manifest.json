@@ -1,0 +1,14 @@
+{
+  "name": "Figma Local MCP Bridge",
+  "id": "figma-local-mcp-bridge",
+  "api": "1.0.0",
+  "main": "dist/plugin/code.js",
+  "ui": "dist/plugin/ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "permissions": [],
+  "networkAccess": {
+    "allowedDomains": ["none"],
+    "devAllowedDomains": ["http://localhost:3846"]
+  }
+}
