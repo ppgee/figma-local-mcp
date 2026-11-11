@@ -16,7 +16,9 @@
     "start": "node dist/server/index.js",
     "install:local": "pnpm build && node scripts/install.mjs",
     "typecheck": "tsc --noEmit",
-    "check": "pnpm typecheck && pnpm build"
+    "check": "pnpm typecheck && pnpm build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
@@ -26,6 +28,7 @@
     "@figma/plugin-typings": "1.142.0",
     "@types/node": "^22.0.0",
     "esbuild": "0.28.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
   }
 }

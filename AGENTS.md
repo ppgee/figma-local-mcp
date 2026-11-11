@@ -16,11 +16,14 @@
 - `src/plugin/code.ts`：选区同步、Prompt 生成、插件命令执行和轮询。
 - `src/plugin/ui.html`：独立插件界面，无前端框架或外部资源。
 - `src/plugin/serialize.ts`：设计结构和节点的序列化。
-- `src/server/index.ts`：MCP 工具注册、参数校验和导出文件写入。
-- `src/server/bridge.ts`：本地 HTTP 桥接、认证、命令队列和连接状态。
+- `src/plugin/prompt.ts`、`src/plugin/export.ts`：插件纯函数（Prompt 模板、base64 编码、导出倍率计算）。
+- `src/server/index.ts`：MCP 服务入口，装配桥接、工具注册与 stdio 传输。
+- `src/server/tools.ts`：MCP 工具注册、参数校验和导出文件写入。
+- `src/server/bridge.ts`：本地 HTTP 桥接、认证、命令队列和连接状态；端口与令牌可通过 `BridgeOptions` 注入（默认读本地配置）。
 - `src/server/config.ts`：用户数据目录中的本地配置。
 - `src/shared/protocol.ts`：插件与服务端共享的协议类型。
 - `scripts/build.mjs`、`scripts/install.mjs`：构建和本地安装。
+- `tests/`：vitest 单元与集成测试。
 - `manifest.json`：Figma 插件入口及网络权限。
 
 ## 工程约定
@@ -39,6 +42,8 @@ pnpm install --frozen-lockfile  # 安装锁定依赖
 pnpm typecheck                 # TypeScript 类型检查
 pnpm build                     # 构建到 dist/
 pnpm check                     # 类型检查并构建
+pnpm test                      # 运行单元与集成测试
+pnpm test:watch                # 测试 watch 模式
 pnpm install:local             # 构建并安装到本机固定目录
 ```
 
@@ -46,9 +51,10 @@ pnpm install:local             # 构建并安装到本机固定目录
 
 ## 验证要求
 
-- 源码、构建脚本或依赖变更后运行 `pnpm check`。纯文档变更不必重复构建。
-- 项目目前没有自动化测试，不擅自引入测试框架或生成测试脚手架。
-- 插件改动需在 Figma 桌面端验证与变更相关的真实场景，包括选区同步、实际粘贴内容、空选/多选和收起状态。构建成功不等于界面验证通过。
+- 源码、构建脚本或依赖变更后运行 `pnpm check`；服务端、序列化或测试相关变更后同时运行 `pnpm test`。纯文档变更不必重复构建。
+- 测试框架为 vitest（仅 devDependency）。单元与集成测试位于 `tests/`，覆盖序列化截断、插件纯函数、配置校验、桥接认证/队列/超时/多实例复用和 MCP 工具层。
+- 测试通过临时沙箱目录与随机回环端口运行：不得读写真实的 `~/.local/share/figma-local-mcp` 配置与导出目录，不得占用或终止 3846 端口上的现有服务。
+- 插件 UI（`ui.html`）和插件轮询编排（`code.ts` 的 poll 循环与消息处理）不在自动化测试范围，仍需在 Figma 桌面端验证与变更相关的真实场景，包括选区同步、实际粘贴内容、空选/多选和收起状态。构建成功不等于界面验证通过。
 - MCP 改动需通过真实客户端调用相关工具，不能只验证模块导入或服务启动。
 - 日志出现 `Bridge mode: reusing` 表示复用已有服务，不能据此声称新启动的服务端代码已验证。不要为了测试擅自终止其他 Agent 的 MCP 进程。
 - `pnpm install:local` 会修改仓库外的本地安装，仅在需要验证安装流程时运行。只清理由本次运行产生的备份，优先移入废纸篓。

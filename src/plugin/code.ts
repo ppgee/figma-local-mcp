@@ -3,9 +3,10 @@ import type {
   PluginCommand,
   PluginDocumentStatus,
   PluginResult,
-  PluginSelectedNode,
 } from '../shared/protocol';
 import { cloneValue, createDesignContext, summarizeNode } from './serialize';
+import { createNodePrompt } from './prompt';
+import { base64Encode, computeExportScale } from './export';
 
 declare const __BRIDGE_ORIGIN__: string;
 declare const __BRIDGE_TOKEN__: string;
@@ -37,11 +38,6 @@ function documentStatus(): PluginDocumentStatus {
     } : null,
     pluginVersion: __PLUGIN_VERSION__,
   };
-}
-
-function createNodePrompt(node: PluginSelectedNode): string {
-  const name = node.name.replace(/\s+/g, ' ').trim() || '未命名节点';
-  return `使用 figma-local 分析 Figma 节点「${name}」。\nnodeId: ${node.id}\n\n调用 get_design_context 和 get_screenshot，分析该节点的布局、文本、样式、组件和变量绑定。\n只读，不要修改 Figma 文件。`;
 }
 
 function emitStatus(): void {
@@ -135,35 +131,14 @@ async function getVariableDefs(maxVariables: number): Promise<Record<string, unk
   };
 }
 
-function base64Encode(bytes: Uint8Array): string {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  let output = '';
-  for (let index = 0; index < bytes.length; index += 3) {
-    const first = bytes[index];
-    const hasSecond = index + 1 < bytes.length;
-    const hasThird = index + 2 < bytes.length;
-    const second = hasSecond ? bytes[index + 1] : 0;
-    const third = hasThird ? bytes[index + 2] : 0;
-    const value = (first << 16) | (second << 8) | third;
-    output += alphabet[(value >> 18) & 63];
-    output += alphabet[(value >> 12) & 63];
-    output += hasSecond ? alphabet[(value >> 6) & 63] : '=';
-    output += hasThird ? alphabet[value & 63] : '=';
-  }
-  return output;
-}
-
 async function exportNode(args: Record<string, unknown>): Promise<ExportPayload> {
   const node = await resolveSceneNode(typeof args.nodeId === 'string' ? args.nodeId : undefined);
   const format = (typeof args.format === 'string' ? args.format : 'PNG') as ExportPayload['format'];
-  let scale = typeof args.scale === 'number' ? args.scale : 1;
-  if (typeof args.maxDimension === 'number') {
-    const bounds = node.absoluteBoundingBox;
-    if (bounds && Math.max(bounds.width, bounds.height) > 0) {
-      scale = Math.min(scale, args.maxDimension / Math.max(bounds.width, bounds.height));
-    }
-  }
-  scale = Math.max(0.01, Math.min(scale, 4));
+  const scale = computeExportScale(
+    node.absoluteBoundingBox,
+    typeof args.scale === 'number' ? args.scale : 1,
+    typeof args.maxDimension === 'number' ? args.maxDimension : undefined,
+  );
   const bytes = await node.exportAsync({ format, constraint: { type: 'SCALE', value: scale } });
   if (bytes.length > MAX_EXPORT_BYTES) {
     throw new Error(`导出结果为 ${bytes.length} 字节，超过 ${MAX_EXPORT_BYTES} 字节限制；请缩小节点或降低导出倍率。`);

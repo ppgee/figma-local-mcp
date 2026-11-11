@@ -90,6 +90,7 @@ pnpm run install:local
 pnpm run typecheck  # TypeScript 类型检查
 pnpm run build      # 构建 MCP 服务和插件到 dist/
 pnpm run check      # 类型检查并构建
+pnpm test           # 运行单元与集成测试（vitest）
 pnpm start          # 通过 stdio 启动 MCP 服务
 ```
 
@@ -99,8 +100,9 @@ pnpm start          # 通过 stdio 启动 MCP 服务
 - `src/server/`：MCP 服务和本地桥接。
 - `src/shared/`：插件与服务端共享的协议类型。
 - `scripts/`：构建和本地安装脚本。
+- `tests/`：单元与集成测试。
 
-项目目前没有自动化测试。变更后至少运行 `pnpm run check`，并在 Figma 桌面端验证选区同步、Prompt 复制和 MCP 节点读取。
+单元与集成测试覆盖节点序列化截断、插件纯函数、本地配置校验、桥接认证/命令队列/超时/多实例复用，以及 MCP 工具参数校验与导出落盘。测试使用临时沙箱目录和随机回环端口，不会读写本机真实配置，也不会影响正在运行的服务。插件界面与轮询编排仍需在 Figma 桌面端人工验证。变更后至少运行 `pnpm run check` 与 `pnpm test`，并在 Figma 桌面端验证选区同步、Prompt 复制和 MCP 节点读取。
 
 ## 本地数据与安全
 

@@ -1,6 +1,6 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { bridgeOrigin, localConfig } from './config.js';
+import { localConfig } from './config.js';
 import type {
   BridgeStatus,
   PluginCommand,
@@ -26,8 +26,8 @@ interface PendingCommand {
   timer: ReturnType<typeof setTimeout>;
 }
 
-function tokensMatch(supplied: string): boolean {
-  const expectedDigest = createHash('sha256').update(localConfig.token).digest();
+function tokensMatch(expected: string, supplied: string): boolean {
+  const expectedDigest = createHash('sha256').update(expected).digest();
   const suppliedDigest = createHash('sha256').update(supplied).digest();
   return timingSafeEqual(expectedDigest, suppliedDigest);
 }
@@ -35,26 +35,6 @@ function tokensMatch(supplied: string): boolean {
 function sendJson(response: ServerResponse, status: number, value: unknown): void {
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   response.end(JSON.stringify(value));
-}
-
-async function requestBridge(
-  method: 'GET' | 'POST',
-  path: string,
-  body?: unknown,
-  timeoutMs = 10_000,
-): Promise<Record<string, unknown>> {
-  const response = await fetch(`${bridgeOrigin}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${localConfig.token}`,
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  const payload = await response.json() as Record<string, unknown> & { error?: string };
-  if (!response.ok) throw new Error(payload.error || `已有桥接返回 ${response.status}`);
-  return payload;
 }
 
 async function readJson(request: IncomingMessage): Promise<Record<string, unknown>> {
@@ -79,19 +59,43 @@ async function readJson(request: IncomingMessage): Promise<Record<string, unknow
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
 }
 
+export interface BridgeOptions {
+  port?: number;
+  token?: string;
+}
+
 export class PluginBridge {
   private readonly server: Server;
   private readonly pending = new Map<string, PendingCommand>();
   private readonly queue: string[] = [];
   private readonly active = new Set<string>();
+  private readonly options: BridgeOptions;
   private documentStatus: PluginDocumentStatus | null = null;
   private lastSeen: number | null = null;
   private remoteFallback = false;
 
-  constructor() {
+  constructor(options: BridgeOptions = {}) {
+    this.options = options;
     this.server = createServer((request, response) => {
       void this.handleRequest(request, response);
     });
+  }
+
+  private get port(): number {
+    return this.options.port ?? localConfig.port;
+  }
+
+  private get token(): string {
+    return this.options.token ?? localConfig.token;
+  }
+
+  private get origin(): string {
+    return `http://localhost:${this.boundPort ?? this.port}`;
+  }
+
+  get boundPort(): number | null {
+    const address = this.server.address();
+    return typeof address === 'object' && address !== null ? address.port : null;
   }
 
   get connectionMode(): 'listening' | 'reusing' {
@@ -103,7 +107,7 @@ export class PluginBridge {
       await new Promise<void>((resolve, reject) => {
         const onError = (error: Error) => reject(error);
         this.server.once('error', onError);
-        this.server.listen(localConfig.port, '127.0.0.1', () => {
+        this.server.listen(this.port, '127.0.0.1', () => {
           this.server.off('error', onError);
           resolve();
         });
@@ -140,7 +144,7 @@ export class PluginBridge {
     timeoutMs = 60_000,
   ): Promise<unknown> {
     if (this.remoteFallback) {
-      const payload = await requestBridge('POST', '/v1/plugin/call', { name, args, timeoutMs }, timeoutMs + 5000);
+      const payload = await this.requestBridge('POST', '/v1/plugin/call', { name, args, timeoutMs }, timeoutMs + 5000);
       return payload.result;
     }
     if (!this.isConnected()) {
@@ -161,6 +165,26 @@ export class PluginBridge {
     });
   }
 
+  private async requestBridge(
+    method: 'GET' | 'POST',
+    path: string,
+    body?: unknown,
+    timeoutMs = 10_000,
+  ): Promise<Record<string, unknown>> {
+    const response = await fetch(`${this.origin}${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.token}`,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const payload = await response.json() as Record<string, unknown> & { error?: string };
+    if (!response.ok) throw new Error(payload.error || `已有桥接返回 ${response.status}`);
+    return payload;
+  }
+
   private getLocalStatus(): BridgeStatus {
     return {
       connected: this.isConnected(),
@@ -177,9 +201,9 @@ export class PluginBridge {
   }
 
   private async getRemoteStatus(): Promise<BridgeStatus> {
-    const payload = await requestBridge('GET', '/health');
-    if (payload.ok !== true || payload.bridge !== bridgeOrigin || !payload.status) {
-      throw new Error(`端口 ${localConfig.port} 已被其他服务占用。`);
+    const payload = await this.requestBridge('GET', '/health');
+    if (payload.ok !== true || payload.bridge !== this.origin || !payload.status) {
+      throw new Error(`端口 ${this.port} 已被其他服务占用。`);
     }
     return payload.status as BridgeStatus;
   }
@@ -203,14 +227,14 @@ export class PluginBridge {
     try {
       const authorization = request.headers.authorization ?? '';
       const supplied = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
-      if (!tokensMatch(supplied)) {
+      if (!tokensMatch(this.token, supplied)) {
         sendJson(response, 401, { error: '未授权' });
         return;
       }
 
-      const path = new URL(request.url ?? '/', bridgeOrigin).pathname;
+      const path = new URL(request.url ?? '/', this.origin).pathname;
       if (request.method === 'GET' && path === '/health') {
-        sendJson(response, 200, { ok: true, bridge: bridgeOrigin, status: this.getLocalStatus() });
+        sendJson(response, 200, { ok: true, bridge: this.origin, status: this.getLocalStatus() });
         return;
       }
       if (request.method === 'POST' && path === '/v1/plugin/call') {
