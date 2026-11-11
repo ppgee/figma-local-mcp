@@ -30,6 +30,19 @@ jobs:
             exit 1
           fi
 
+      - name: 提取 CHANGELOG 对应版本小节作为发布说明
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v ver="$VERSION" '
+            index($0, "## [" ver "]") == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md | sed -e '/./,$!d' > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "CHANGELOG.md 缺少 ## [$VERSION] 小节；请补充变更说明后再打 tag。" >&2
+            exit 1
+          fi
+
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
 
@@ -44,4 +57,4 @@ jobs:
       - name: 创建 GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md --generate-notes

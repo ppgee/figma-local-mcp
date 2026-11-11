@@ -26,4 +26,12 @@ describe('版本号同步', () => {
     expect(versions.size).toBe(1);
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/);
   });
+
+  it('CHANGELOG.md 包含当前版本的小节', () => {
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version: string };
+    const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
+    const section = changelog.split(/^## \[/m).find((part) => part.startsWith(`${pkg.version}]`));
+    expect(section, `CHANGELOG.md 缺少 ## [${pkg.version}] 小节`).toBeTruthy();
+    expect((section ?? '').trim().length).toBeGreaterThan(20);
+  });
 });

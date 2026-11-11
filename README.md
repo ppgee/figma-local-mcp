@@ -113,13 +113,14 @@ pnpm start          # 通过 stdio 启动 MCP 服务
 
 ```bash
 # 1. 同步更新三处版本号（package.json、scripts/build.mjs、src/server/index.ts）
-# 2. 提交并合入 main
-# 3. 打 tag 并推送
+# 2. 在 CHANGELOG.md 增加对应版本的小节（作为 Release 正文）
+# 3. 提交并合入 main
+# 4. 打 tag 并推送
 git tag v0.2.0
 git push origin v0.2.0
 ```
 
-推送 `v*` tag 后，`release.yml` 会校验 tag 与 `package.json` 版本一致，跑完 `pnpm check` 与 `pnpm test`，全部通过后自动创建 GitHub Release 并生成变更说明。版本不一致或测试失败时不会发布。
+推送 `v*` tag 后，`release.yml` 会校验 tag 与 `package.json` 版本一致、CHANGELOG 存在对应小节，跑完 `pnpm check` 与 `pnpm test`，全部通过后创建 GitHub Release，正文取自 CHANGELOG 小节并附加自动生成的变更列表。版本不一致、缺 CHANGELOG 小节或测试失败时不会发布（三处版本号与 CHANGELOG 小节也有测试守卫）。
 
 Release 不附带构建产物：插件构建产物内嵌本地令牌，不能对外分发；使用方按 README 从源码安装。
 

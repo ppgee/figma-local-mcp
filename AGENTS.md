@@ -39,8 +39,8 @@
 
 ## 发布与版本
 
-- 发布流程：同步三处版本号 → 合入 `main` → 打 `vX.Y.Z` tag 并推送。
-- `release.yml` 由 `v*` tag 触发：校验 tag 与 `package.json` 版本一致，`pnpm check` 与 `pnpm test` 通过后自动创建 GitHub Release。
+- 发布流程：同步三处版本号 → 在 `CHANGELOG.md` 增加对应版本小节 → 合入 `main` → 打 `vX.Y.Z` tag 并推送。
+- `release.yml` 由 `v*` tag 触发：校验 tag 与 `package.json` 版本一致、CHANGELOG 存在对应小节，`pnpm check` 与 `pnpm test` 通过后创建 GitHub Release，正文取自 CHANGELOG 小节。`tests/version-sync.test.ts` 同步校验版本号与 CHANGELOG 小节。
 - 禁止把 `dist/` 构建产物附加到 Release 或对外分发：插件产物内嵌本地令牌。
 
 ## 常用命令
