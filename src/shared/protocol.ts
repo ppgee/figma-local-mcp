@@ -26,6 +26,8 @@ export interface PluginSelectedNode {
 }
 
 export interface PluginDocumentStatus {
+  /** Figma file key; stable per file. The plugin uses a synthetic key for unsaved drafts. */
+  fileKey: string;
   fileName: string;
   pageId: string;
   pageName: string;
@@ -35,11 +37,19 @@ export interface PluginDocumentStatus {
   locale: Locale;
 }
 
-export interface BridgeStatus extends PluginDocumentStatus {
-  connected: boolean;
-  lastSeen: string | null;
+/** Status of one connected Figma file (one bridge session per file key). */
+export interface FileSessionStatus extends PluginDocumentStatus {
+  lastSeen: string;
   queuedCommands: number;
   activeCommands: number;
+}
+
+export interface BridgeStatus {
+  connected: boolean;
+  /** File key of the most recently active session; null when nothing is connected. */
+  activeFileKey: string | null;
+  /** Connected files, most recently active first. */
+  files: FileSessionStatus[];
 }
 
 export interface ExportPayload {

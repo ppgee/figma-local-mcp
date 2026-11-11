@@ -5,6 +5,7 @@ import { messages } from '../shared/messages.js';
 import type { Locale } from '../shared/messages.js';
 import type {
   BridgeStatus,
+  FileSessionStatus,
   PluginCommand,
   PluginCommandName,
   PluginDocumentStatus,
@@ -21,11 +22,21 @@ const commandNames: readonly PluginCommandName[] = [
 ];
 
 interface PendingCommand {
+  fileKey: string;
   name: PluginCommandName;
   args: Record<string, unknown>;
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
+}
+
+/** One bridge session per connected Figma file, keyed by the plugin-reported file key. */
+interface FileSession {
+  fileKey: string;
+  status: PluginDocumentStatus;
+  lastSeen: number;
+  queue: string[];
+  active: Set<string>;
 }
 
 function tokensMatch(expected: string, supplied: string): boolean {
@@ -69,12 +80,9 @@ export interface BridgeOptions {
 export class PluginBridge {
   private readonly server: Server;
   private readonly pending = new Map<string, PendingCommand>();
-  private readonly queue: string[] = [];
-  private readonly active = new Set<string>();
+  private readonly sessions = new Map<string, FileSession>();
   private readonly options: BridgeOptions;
-  private documentStatus: PluginDocumentStatus | null = null;
-  private pluginLocale: Locale | null = null;
-  private lastSeen: number | null = null;
+  private lastKnownLocale: Locale | null = null;
   private remoteFallback = false;
 
   constructor(options: BridgeOptions = {}) {
@@ -84,8 +92,43 @@ export class PluginBridge {
     });
   }
 
+  /** Locale for messages that are not tied to a specific file session. */
   private m() {
-    return messages(this.pluginLocale ?? 'en');
+    return messages(this.lastKnownLocale ?? 'en');
+  }
+
+  private messagesFor(session: FileSession | null | undefined) {
+    return messages(session?.status.locale ?? this.lastKnownLocale ?? 'en');
+  }
+
+  private activeSession(): FileSession | null {
+    let active: FileSession | null = null;
+    for (const session of this.sessions.values()) {
+      if (active === null || session.lastSeen > active.lastSeen) active = session;
+    }
+    return active;
+  }
+
+  private pruneSessions(): void {
+    const now = Date.now();
+    for (const session of [...this.sessions.values()]) {
+      if (now - session.lastSeen <= CONNECTION_WINDOW_MS) continue;
+      const error = new Error(this.messagesFor(session).fileDisconnected(session.status.fileName));
+      this.failSessionCommands(session, error);
+      this.sessions.delete(session.fileKey);
+    }
+  }
+
+  private failSessionCommands(session: FileSession, error: Error): void {
+    for (const id of [...session.queue, ...session.active]) {
+      const command = this.pending.get(id);
+      if (!command) continue;
+      clearTimeout(command.timer);
+      this.pending.delete(id);
+      command.reject(error);
+    }
+    session.queue.length = 0;
+    session.active.clear();
   }
 
   private get port(): number {
@@ -130,13 +173,13 @@ export class PluginBridge {
 
   async close(): Promise<void> {
     if (this.remoteFallback) return;
-    for (const pending of this.pending.values()) {
-      clearTimeout(pending.timer);
-      pending.reject(new Error(this.m().shuttingDown));
+    const error = new Error(this.m().shuttingDown);
+    for (const command of this.pending.values()) {
+      clearTimeout(command.timer);
+      command.reject(error);
     }
     this.pending.clear();
-    this.queue.length = 0;
-    this.active.clear();
+    this.sessions.clear();
     this.server.closeAllConnections();
     await new Promise<void>((resolve) => this.server.close(() => resolve()));
   }
@@ -149,26 +192,33 @@ export class PluginBridge {
     name: PluginCommandName,
     args: Record<string, unknown>,
     timeoutMs = 60_000,
+    fileKey?: string,
   ): Promise<unknown> {
     if (this.remoteFallback) {
-      const payload = await this.requestBridge('POST', '/v1/plugin/call', { name, args, timeoutMs }, timeoutMs + 5000);
+      const payload = await this.requestBridge('POST', '/v1/plugin/call', { name, args, timeoutMs, fileKey }, timeoutMs + 5000);
       return payload.result;
     }
-    if (!this.isConnected()) {
-      throw new Error(this.m().pluginNotConnected);
+    this.pruneSessions();
+    const target = fileKey === undefined ? this.activeSession() : this.sessions.get(fileKey) ?? null;
+    if (target === null) {
+      throw new Error(fileKey === undefined ? this.m().pluginNotConnected : this.m().fileNotConnected(fileKey));
     }
-
+    const catalog = this.messagesFor(target);
+    const targetKey = target.fileKey;
     const id = randomUUID();
     return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        this.active.delete(id);
-        const index = this.queue.indexOf(id);
-        if (index >= 0) this.queue.splice(index, 1);
-        reject(new Error(this.m().commandTimeout(name)));
+        const session = this.sessions.get(targetKey);
+        if (session) {
+          const queueIndex = session.queue.indexOf(id);
+          if (queueIndex >= 0) session.queue.splice(queueIndex, 1);
+          session.active.delete(id);
+        }
+        reject(new Error(catalog.commandTimeout(name)));
       }, timeoutMs);
-      this.pending.set(id, { name, args, resolve, reject, timer });
-      this.queue.push(id);
+      this.pending.set(id, { fileKey: targetKey, name, args, resolve, reject, timer });
+      target.queue.push(id);
     });
   }
 
@@ -193,18 +243,24 @@ export class PluginBridge {
   }
 
   private getLocalStatus(): BridgeStatus {
+    this.pruneSessions();
+    const sessions = [...this.sessions.values()].sort((a, b) => b.lastSeen - a.lastSeen);
     return {
-      connected: this.isConnected(),
-      fileName: this.documentStatus?.fileName ?? '',
-      pageId: this.documentStatus?.pageId ?? '',
-      pageName: this.documentStatus?.pageName ?? '',
-      selectionCount: this.documentStatus?.selectionCount ?? 0,
-      selectedNode: this.documentStatus?.selectedNode ?? null,
-      pluginVersion: this.documentStatus?.pluginVersion ?? '',
-      locale: this.documentStatus?.locale ?? 'en',
-      lastSeen: this.lastSeen === null ? null : new Date(this.lastSeen).toISOString(),
-      queuedCommands: this.queue.length,
-      activeCommands: this.active.size,
+      connected: sessions.length > 0,
+      activeFileKey: sessions.length > 0 ? sessions[0].fileKey : null,
+      files: sessions.map((session): FileSessionStatus => ({
+        fileKey: session.fileKey,
+        fileName: session.status.fileName,
+        pageId: session.status.pageId,
+        pageName: session.status.pageName,
+        selectionCount: session.status.selectionCount,
+        selectedNode: session.status.selectedNode,
+        pluginVersion: session.status.pluginVersion,
+        locale: session.status.locale,
+        lastSeen: new Date(session.lastSeen).toISOString(),
+        queuedCommands: session.queue.length,
+        activeCommands: session.active.size,
+      })),
     };
   }
 
@@ -214,10 +270,6 @@ export class PluginBridge {
       throw new Error(this.m().portOccupied(this.port));
     }
     return payload.status as BridgeStatus;
-  }
-
-  private isConnected(): boolean {
-    return this.lastSeen !== null && Date.now() - this.lastSeen < CONNECTION_WINDOW_MS;
   }
 
   private async handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -253,19 +305,23 @@ export class PluginBridge {
         }
         const requestedTimeout = typeof body.timeoutMs === 'number' ? body.timeoutMs : 60_000;
         const timeoutMs = Math.max(1, Math.min(requestedTimeout, 130_000));
+        const fileKey = typeof body.fileKey === 'string' && body.fileKey.trim() !== ''
+          ? body.fileKey.trim()
+          : undefined;
         const result = await this.call(
           body.name as PluginCommandName,
           typeof body.args === 'object' && body.args !== null ? body.args as Record<string, unknown> : {},
           timeoutMs,
+          fileKey,
         );
         sendJson(response, 200, { result });
         return;
       }
       if (request.method === 'POST' && path === '/v1/plugin/poll') {
         const body = await readJson(request, this.m().requestTooLarge);
-        this.updateDocumentStatus(body);
-        const command = this.nextCommand();
-        sendJson(response, 200, { command });
+        const session = this.touchSession(body);
+        this.pruneSessions();
+        sendJson(response, 200, { command: this.nextCommand(session) });
         return;
       }
       if (request.method === 'POST' && path === '/v1/plugin/result') {
@@ -284,11 +340,18 @@ export class PluginBridge {
     }
   }
 
-  private updateDocumentStatus(body: Record<string, unknown>): void {
+  private touchSession(body: Record<string, unknown>): FileSession {
+    const fileKey = typeof body.fileKey === 'string' ? body.fileKey.trim().slice(0, 100) : '';
+    if (!fileKey) {
+      throw Object.assign(new Error(this.m().missingFileKey), { statusCode: 400 });
+    }
+    const previous = this.sessions.get(fileKey)?.status ?? null;
     const node = typeof body.selectedNode === 'object' && body.selectedNode !== null
       ? body.selectedNode as Record<string, unknown>
       : null;
-    this.documentStatus = {
+    const locale = body.locale === 'zh' || body.locale === 'en' ? body.locale : null;
+    const status: PluginDocumentStatus = {
+      fileKey,
       fileName: typeof body.fileName === 'string' ? body.fileName.slice(0, 500) : '',
       pageId: typeof body.pageId === 'string' ? body.pageId.slice(0, 100) : '',
       pageName: typeof body.pageName === 'string' ? body.pageName.slice(0, 500) : '',
@@ -306,33 +369,43 @@ export class PluginBridge {
         }
         : null,
       pluginVersion: typeof body.pluginVersion === 'string' ? body.pluginVersion.slice(0, 50) : '',
-      locale: body.locale === 'zh' || body.locale === 'en' ? body.locale : (this.documentStatus?.locale ?? 'en'),
+      locale: locale ?? previous?.locale ?? 'en',
     };
-    if (body.locale === 'zh' || body.locale === 'en') this.pluginLocale = body.locale;
-    this.lastSeen = Date.now();
+    if (locale) this.lastKnownLocale = locale;
+
+    const existing = this.sessions.get(fileKey);
+    if (existing) {
+      existing.status = status;
+      existing.lastSeen = Date.now();
+      return existing;
+    }
+    const session: FileSession = { fileKey, status, lastSeen: Date.now(), queue: [], active: new Set() };
+    this.sessions.set(fileKey, session);
+    return session;
   }
 
-  private nextCommand(): PluginCommand | null {
-    if (this.active.size > 0) return null;
-    const id = this.queue.shift();
-    if (!id) return null;
+  private nextCommand(session: FileSession): PluginCommand | null {
+    if (session.active.size > 0) return null;
+    const id = session.queue.shift();
+    if (id === undefined) return null;
     const pending = this.pending.get(id);
-    if (!pending) return this.nextCommand();
-    this.active.add(id);
+    if (!pending) return this.nextCommand(session);
+    session.active.add(id);
     return { id, name: pending.name, args: pending.args };
   }
 
   private acceptResult(result: PluginResult): void {
-    const pending = this.pending.get(result.id);
-    if (!pending || !this.active.delete(result.id)) {
+    const command = this.pending.get(result.id);
+    const session = command ? this.sessions.get(command.fileKey) : undefined;
+    if (!command || !session || !session.active.delete(result.id)) {
       throw Object.assign(new Error(this.m().unknownResult), { statusCode: 404 });
     }
-    clearTimeout(pending.timer);
+    clearTimeout(command.timer);
     this.pending.delete(result.id);
     if (result.ok) {
-      pending.resolve(result.result);
+      command.resolve(result.result);
     } else {
-      pending.reject(new Error((result.error || this.m().pluginExecutionFailed).slice(0, 2000)));
+      command.reject(new Error((result.error || this.messagesFor(session).pluginExecutionFailed).slice(0, 2000)));
     }
   }
 }

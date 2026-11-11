@@ -20,7 +20,7 @@ This file defines how the repository is developed and verified. Installation, ag
 - `src/plugin/prompt.ts`, `src/plugin/export.ts`: plugin pure helpers (prompt template, base64 encoding, export scale computation).
 - `src/server/index.ts`: MCP service entry — assembles the bridge, tool registration and stdio transport.
 - `src/server/tools.ts`: MCP tool registration, parameter validation and export file writing.
-- `src/server/bridge.ts`: local HTTP bridge, auth, command queue and connection state; port and token are injectable via `BridgeOptions` (defaults come from local config).
+- `src/server/bridge.ts`: local HTTP bridge, auth, per-file sessions, command routing and connection state; port and token are injectable via `BridgeOptions` (defaults come from local config).
 - `src/server/config.ts`: local configuration in the user data directory.
 - `src/shared/protocol.ts`: protocol types shared by plugin and server.
 - `src/shared/messages.ts`: bilingual runtime message catalog (single source for localized strings).
@@ -38,6 +38,7 @@ This file defines how the repository is developed and verified. Installation, ag
 - Do not hardcode user directories or machine paths in source; use `os.homedir()` where a home directory is needed.
 - User-facing runtime strings live in the shared bilingual catalog `src/shared/messages.ts` (the `zh` table is type-checked against `en`). The plugin UI has its own table in `ui.html` (it cannot import modules).
 - Protocol changes must update `src/shared/protocol.ts`, the plugin implementation and the runtime validation in `src/server/bridge.ts` together — types alone are not enough.
+- Session model: the bridge keeps one session per Figma file key (`PluginDocumentStatus.fileKey`; the plugin falls back to a synthetic key for unsaved drafts). Polls without a `fileKey` are rejected. Commands route to the targeted session's queue — per-file serialization, parallel across files — and without a `fileKey` they target the most recently active session. Sessions expire after 5s without reports, failing their queued commands immediately.
 - The version number exists in `package.json`, `scripts/build.mjs` and `src/server/index.ts` and must be bumped in sync; `tests/version-sync.test.ts` verifies all three match.
 
 ## Releases and versioning
@@ -64,7 +65,7 @@ pnpm install:local             # Build and install into the fixed local director
 ## Verification requirements
 
 - Run `pnpm check` after source, build script or dependency changes; also run `pnpm test` after server, serialization or test changes. Pure documentation changes do not need a rebuild.
-- The test framework is vitest (devDependency only). Unit and integration tests live in `tests/`, covering serialization truncation, plugin command execution, plugin pure helpers, config validation, bridge auth/queue/timeout/multi-instance reuse, the MCP tool layer and version sync.
+- The test framework is vitest (devDependency only). Unit and integration tests live in `tests/`, covering serialization truncation, plugin command execution, plugin pure helpers, config validation, bridge auth/queue/timeout/multi-file sessions/multi-instance reuse, the MCP tool layer and version sync.
 - Tests run with sandbox directories and random loopback ports: never read or write the real `~/.local/share/figma-local-mcp` config or export directories, and never occupy or terminate services on port 3846.
 - The plugin UI (`ui.html`) and the plugin polling orchestration (`code.ts` poll loop and message handling) are outside automated tests; verify real scenarios in the Figma desktop app — selection sync, actual pasted content, empty/multi selection and the collapsed state. A successful build is not a passing UI verification.
 - MCP changes must be exercised through a real client calling the affected tools; importing the module or starting the service is not enough.
@@ -74,6 +75,7 @@ pnpm install:local             # Build and install into the fixed local director
 ## Plugin behavior constraints
 
 - The plugin UI language follows the system locale (`zh*` → Chinese, otherwise English) with a manual toggle persisted in clientStorage; the plugin reports its locale to the server, which localizes runtime messages accordingly (English fallback before the plugin connects).
+- Each plugin window reports its file's key (`figma.fileKey`, synthetic for drafts). Multiple files may connect simultaneously; each gets its own bridge session, and tools can target a file with the optional `fileKey` argument.
 - With a single selection, show and copy the current node prompt; with an empty or multi selection, disable copy.
 - Re-read the current selection when copying — never use a cached stale node.
 - Update the UI promptly after `selectionchange` and `currentpagechange`.

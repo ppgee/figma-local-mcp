@@ -26,13 +26,35 @@ async function pluginResult(body: Record<string, unknown>, token = TOKEN) {
   return api(origin, '/v1/plugin/result', { method: 'POST', body, token });
 }
 
-async function pollUntilCommand(targetOrigin: string, token: string): Promise<Record<string, unknown>> {
+async function pollUntilCommand(
+  targetOrigin: string,
+  token: string,
+  fileKey = 'file-key-1',
+): Promise<Record<string, unknown>> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    const response = await api(targetOrigin, '/v1/plugin/poll', { method: 'POST', body: documentStatus(), token });
+    const response = await api(targetOrigin, '/v1/plugin/poll', {
+      method: 'POST',
+      body: documentStatus({ fileKey }),
+      token,
+    });
     if (response.body.command) return response.body.command as Record<string, unknown>;
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   throw new Error('Polling timed out: no command entered the queue.');
+}
+
+interface SessionStatus {
+  fileKey: string;
+  fileName: string;
+  pageId: string;
+  pageName: string;
+  selectionCount: number;
+  selectedNode: Record<string, unknown> | null;
+  pluginVersion: string;
+  locale: string;
+  lastSeen: string;
+  queuedCommands: number;
+  activeCommands: number;
 }
 
 async function health(token = TOKEN) {
@@ -41,19 +63,7 @@ async function health(token = TOKEN) {
   return response.body as {
     ok: boolean;
     bridge: string;
-    status: {
-      connected: boolean;
-      fileName: string;
-      pageId: string;
-      pageName: string;
-      selectionCount: number;
-      selectedNode: Record<string, unknown> | null;
-      pluginVersion: string;
-      locale: string;
-      lastSeen: string | null;
-      queuedCommands: number;
-      activeCommands: number;
-    };
+    status: { connected: boolean; activeFileKey: string | null; files: SessionStatus[] };
   };
 }
 
@@ -102,15 +112,13 @@ describe('auth and basic routing', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
   });
 
-  it('starts disconnected with empty queues', async () => {
+  it('starts disconnected with no sessions', async () => {
     const body = await health();
     expect(body.ok).toBe(true);
     expect(body.bridge).toBe(origin);
     expect(body.status.connected).toBe(false);
-    expect(body.status.selectedNode).toBeNull();
-    expect(body.status.lastSeen).toBeNull();
-    expect(body.status.queuedCommands).toBe(0);
-    expect(body.status.activeCommands).toBe(0);
+    expect(body.status.activeFileKey).toBeNull();
+    expect(body.status.files).toEqual([]);
   });
 
   it('returns 404 for unknown endpoints and 400 for unknown commands', async () => {
@@ -138,6 +146,16 @@ describe('auth and basic routing', () => {
 });
 
 describe('plugin status sync', () => {
+  it('rejects polls without a fileKey', async () => {
+    const response = await api(origin, '/v1/plugin/poll', {
+      method: 'POST',
+      body: { locale: 'en', fileName: 'no key' },
+      token: TOKEN,
+    });
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('fileKey');
+  });
+
   it('poll reports document status and returns no command', async () => {
     const response = await pluginPoll();
     expect(response.status).toBe(200);
@@ -145,15 +163,20 @@ describe('plugin status sync', () => {
 
     const body = await health();
     expect(body.status.connected).toBe(true);
-    expect(body.status.fileName).toBe('测试文件');
-    expect(body.status.pageName).toBe('Page 1');
-    expect(body.status.selectionCount).toBe(1);
-    expect(body.status.selectedNode).toEqual({ id: '1:1', name: '首页', type: 'FRAME' });
-    expect(body.status.lastSeen).not.toBeNull();
+    expect(body.status.activeFileKey).toBe('file-key-1');
+    expect(body.status.files).toHaveLength(1);
+    const session = body.status.files[0];
+    expect(session.fileName).toBe('测试文件');
+    expect(session.pageName).toBe('Page 1');
+    expect(session.selectionCount).toBe(1);
+    expect(session.selectedNode).toEqual({ id: '1:1', name: '首页', type: 'FRAME' });
+    expect(session.lastSeen).not.toBeNull();
   });
 
   it('clamps oversized fields and zeroes invalid counts', async () => {
+    const longKey = 'k'.repeat(200);
     await pluginPoll(TOKEN, documentStatus({
+      fileKey: longKey,
       fileName: 'f'.repeat(600),
       pageId: 'p'.repeat(200),
       selectionCount: 999_999,
@@ -161,14 +184,16 @@ describe('plugin status sync', () => {
       pluginVersion: 'v'.repeat(60),
     }));
     const body = await health();
-    expect(body.status.fileName.length).toBe(500);
-    expect(body.status.pageId.length).toBe(100);
-    expect(body.status.selectionCount).toBe(100_000);
-    expect(body.status.selectedNode).toBeNull();
-    expect(body.status.pluginVersion.length).toBe(50);
+    const session = body.status.files[0];
+    expect(session.fileKey.length).toBe(100);
+    expect(session.fileName.length).toBe(500);
+    expect(session.pageId.length).toBe(100);
+    expect(session.selectionCount).toBe(100_000);
+    expect(session.selectedNode).toBeNull();
+    expect(session.pluginVersion.length).toBe(50);
 
-    await pluginPoll(TOKEN, documentStatus({ selectionCount: 2.5 }));
-    expect((await health()).status.selectionCount).toBe(0);
+    await pluginPoll(TOKEN, documentStatus({ fileKey: longKey, selectionCount: 2.5 }));
+    expect((await health()).status.files[0].selectionCount).toBe(0);
   });
 
   it('treats the plugin as disconnected after 5s without reports', async () => {
@@ -179,7 +204,10 @@ describe('plugin status sync', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
       vi.setSystemTime(new Date(realNow + 6000));
-      expect((await health()).status.connected).toBe(false);
+      const body = await health();
+      expect(body.status.connected).toBe(false);
+      expect(body.status.activeFileKey).toBeNull();
+      expect(body.status.files).toEqual([]);
     } finally {
       vi.useRealTimers();
     }
@@ -203,15 +231,15 @@ describe('command queue and results', () => {
     expect(typeof command1.id).toBe('string');
 
     let body = await health();
-    expect(body.status.queuedCommands).toBe(0);
-    expect(body.status.activeCommands).toBe(1);
+    expect(body.status.files[0].queuedCommands).toBe(0);
+    expect(body.status.files[0].activeCommands).toBe(1);
 
     const second = bridge.call('get_selection', {}, 5000);
     second.catch(() => {});
     await Promise.resolve();
     expect((await pluginPoll()).body.command).toBeNull();
     body = await health();
-    expect(body.status.queuedCommands).toBe(1);
+    expect(body.status.files[0].queuedCommands).toBe(1);
 
     await pluginResult({ id: command1.id, ok: true, result: { document: {}, selection: [] } });
     await expect(first).resolves.toEqual({ document: {}, selection: [] });
@@ -223,8 +251,8 @@ describe('command queue and results', () => {
     await expect(second).rejects.toThrow('boom');
 
     body = await health();
-    expect(body.status.queuedCommands).toBe(0);
-    expect(body.status.activeCommands).toBe(0);
+    expect(body.status.files[0].queuedCommands).toBe(0);
+    expect(body.status.files[0].activeCommands).toBe(0);
   });
 
   it('duplicate or unknown result IDs return 404', async () => {
@@ -239,8 +267,8 @@ describe('command queue and results', () => {
     await expect(bridge.call('get_selection', {}, 60)).rejects.toThrow(/timed out/);
 
     const body = await health();
-    expect(body.status.queuedCommands).toBe(0);
-    expect(body.status.activeCommands).toBe(0);
+    expect(body.status.files[0].queuedCommands).toBe(0);
+    expect(body.status.files[0].activeCommands).toBe(0);
     expect((await pluginPoll()).body.command).toBeNull();
   });
 
@@ -262,7 +290,7 @@ describe('command queue and results', () => {
     await pluginPoll(TOKEN, documentStatus({ locale: 'zh' }));
     await expect(bridge.call('get_selection', {}, 60)).rejects.toThrow(/执行超时/);
     const body = await health();
-    expect(body.status.locale).toBe('zh');
+    expect(body.status.files[0].locale).toBe('zh');
   });
 
   it('/v1/plugin/call waits for the result before responding', async () => {
@@ -277,6 +305,147 @@ describe('command queue and results', () => {
     const response = await pending;
     expect(response.status).toBe(200);
     expect(response.body.result).toEqual({ ok: true });
+  });
+});
+
+describe('multi-file sessions', () => {
+  it('tracks one session per fileKey and reports the most recently active file', async () => {
+    await pluginPoll(TOKEN, documentStatus({
+      fileKey: 'file-a',
+      fileName: 'A 文件',
+      selectedNode: { id: '1:1', name: 'A1', type: 'FRAME' },
+    }));
+    await pluginPoll(TOKEN, documentStatus({ fileKey: 'file-b', fileName: 'B 文件', selectedNode: null }));
+
+    let body = await health();
+    expect(body.status.connected).toBe(true);
+    expect(body.status.files).toHaveLength(2);
+    expect(body.status.activeFileKey).toBe('file-b');
+    const byKey = new Map(body.status.files.map((file) => [file.fileKey, file]));
+    expect(byKey.get('file-a')?.fileName).toBe('A 文件');
+    expect(byKey.get('file-a')?.selectedNode).toEqual({ id: '1:1', name: 'A1', type: 'FRAME' });
+    expect(byKey.get('file-b')?.fileName).toBe('B 文件');
+    expect(byKey.get('file-b')?.selectedNode).toBeNull();
+
+    await pluginPoll(TOKEN, documentStatus({ fileKey: 'file-a', fileName: 'A 文件' }));
+    body = await health();
+    expect(body.status.activeFileKey).toBe('file-a');
+  });
+
+  it('merges polls with the same fileKey into a single session', async () => {
+    await pluginPoll(TOKEN, documentStatus({ fileKey: 'same', fileName: '旧名' }));
+    await pluginPoll(TOKEN, documentStatus({ fileKey: 'same', fileName: '新名' }));
+    const body = await health();
+    expect(body.status.files).toHaveLength(1);
+    expect(body.status.files[0].fileName).toBe('新名');
+  });
+
+  it('routes commands to the targeted file only', async () => {
+    await pluginPoll(TOKEN, documentStatus({ fileKey: 'file-a' }));
+    await pluginPoll(TOKEN, documentStatus({ fileKey: 'file-b' }));
+
+    const targeted = bridge.call('get_selection', {}, 5000, 'file-a');
+    targeted.catch(() => {});
+    await Promise.resolve();
+
+    expect((await pluginPoll(TOKEN, documentStatus({ fileKey: 'file-b' }))).body.command).toBeNull();
+    const dispatched = await pluginPoll(TOKEN, documentStatus({ fileKey: 'file-a' }));
+    const command = dispatched.body.command as Record<string, unknown>;
+    expect(command.name).toBe('get_selection');
+
+    const body = await health();
+    expect(body.status.files.find((file) => file.fileKey === 'file-a')?.activeCommands).toBe(1);
+    expect(body.status.files.find((file) => file.fileKey === 'file-b')?.activeCommands).toBe(0);
+
+    await pluginResult({ id: command.id as string, ok: true, result: { via: 'file-a' } });
+    await expect(targeted).resolves.toEqual({ via: 'file-a' });
+  });
+
+  it('defaults to the most recently active file when no fileKey is given', async () => {
+    await pluginPoll(TOKEN, documentStatus({ fileKey: 'file-a' }));
+    await pluginPoll(TOKEN, documentStatus({ fileKey: 'file-b' }));
+
+    const defaulted = bridge.call('get_selection', {}, 5000);
+    defaulted.catch(() => {});
+    await Promise.resolve();
+
+    expect((await pluginPoll(TOKEN, documentStatus({ fileKey: 'file-a' }))).body.command).toBeNull();
+    const dispatched = await pluginPoll(TOKEN, documentStatus({ fileKey: 'file-b' }));
+    const command = dispatched.body.command as Record<string, unknown>;
+    expect(command.name).toBe('get_selection');
+    await pluginResult({ id: command.id as string, ok: true, result: { via: 'file-b' } });
+    await expect(defaulted).resolves.toEqual({ via: 'file-b' });
+  });
+
+  it('rejects calls for an unknown fileKey with a targeted error', async () => {
+    await pluginPoll();
+    await expect(bridge.call('get_selection', {}, 60, 'nope')).rejects.toThrow(/matches fileKey "nope"/);
+  });
+
+  it('expires a stale session and fails its queued commands', async () => {
+    await pluginPoll(TOKEN, documentStatus({ fileKey: 'file-a', fileName: 'A 文件' }));
+    const queued = bridge.call('get_selection', {}, 30_000, 'file-a');
+    const rejection = expect(queued).rejects.toThrow(/disconnected/);
+
+    const realNow = Date.now();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(realNow + 6000));
+      await health();
+    } finally {
+      vi.useRealTimers();
+    }
+    await rejection;
+    expect((await health()).status.files).toHaveLength(0);
+  });
+
+  it('dispatches commands to different files in parallel', async () => {
+    await pluginPoll(TOKEN, documentStatus({ fileKey: 'file-a' }));
+    await pluginPoll(TOKEN, documentStatus({ fileKey: 'file-b' }));
+
+    const first = bridge.call('get_selection', {}, 5000, 'file-a');
+    const second = bridge.call('get_selection', {}, 5000, 'file-b');
+    first.catch(() => {});
+    second.catch(() => {});
+    await Promise.resolve();
+
+    const dispatchedA = await pluginPoll(TOKEN, documentStatus({ fileKey: 'file-a' }));
+    const dispatchedB = await pluginPoll(TOKEN, documentStatus({ fileKey: 'file-b' }));
+    const commandA = dispatchedA.body.command as Record<string, unknown>;
+    const commandB = dispatchedB.body.command as Record<string, unknown>;
+    expect(commandA).not.toBeNull();
+    expect(commandB).not.toBeNull();
+
+    const body = await health();
+    expect(body.status.files.find((file) => file.fileKey === 'file-a')?.activeCommands).toBe(1);
+    expect(body.status.files.find((file) => file.fileKey === 'file-b')?.activeCommands).toBe(1);
+
+    await pluginResult({ id: commandB.id as string, ok: true, result: { via: 'b' } });
+    await expect(second).resolves.toEqual({ via: 'b' });
+    await pluginResult({ id: commandA.id as string, ok: true, result: { via: 'a' } });
+    await expect(first).resolves.toEqual({ via: 'a' });
+  });
+
+  it('forwards the fileKey over /v1/plugin/call and reports unknown files', async () => {
+    await pluginPoll();
+    const pending = api(origin, '/v1/plugin/call', {
+      method: 'POST',
+      body: { name: 'get_selection', args: {}, timeoutMs: 3000, fileKey: 'file-key-1' },
+      token: TOKEN,
+    });
+    const command = await pollUntilCommand(origin, TOKEN, 'file-key-1');
+    await pluginResult({ id: command.id, ok: true, result: { ok: true } });
+    const response = await pending;
+    expect(response.status).toBe(200);
+    expect(response.body.result).toEqual({ ok: true });
+
+    const missing = await api(origin, '/v1/plugin/call', {
+      method: 'POST',
+      body: { name: 'get_selection', args: {}, fileKey: 'missing' },
+      token: TOKEN,
+    });
+    expect(missing.status).toBe(400);
+    expect(missing.body.error).toContain('matches fileKey');
   });
 });
 
@@ -297,7 +466,7 @@ describe('multi-instance reuse', () => {
       expect(secondary.connectionMode).toBe('reusing');
       expect((await secondary.getStatus()).connected).toBe(true);
 
-      const forwarded = secondary.call('get_selection', {}, 3000);
+      const forwarded = secondary.call('get_selection', {}, 3000, 'file-key-1');
       const command = await pollUntilCommand(primaryOrigin, token);
       expect(command.name).toBe('get_selection');
       await api(primaryOrigin, '/v1/plugin/result', {

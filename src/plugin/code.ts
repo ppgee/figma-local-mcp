@@ -12,6 +12,10 @@ const EXPANDED_SIZE = { width: 360, height: 476 };
 const COLLAPSED_SIZE = { width: 328, height: 60 };
 const VIEW_STORAGE_KEY = 'ui-collapsed';
 const LOCALE_STORAGE_KEY = 'ui-locale';
+// Stable per-file identity for bridge sessions; unsaved drafts have no file key,
+// so they fall back to a synthetic key generated once per plugin run.
+const fileKey = figma.fileKey
+  || `draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 let connected = false;
 let polling = false;
 let executing = false;
@@ -25,7 +29,7 @@ function m() {
 }
 
 function emitStatus(): void {
-  const status = readDocumentStatus(figma, __PLUGIN_VERSION__, uiLocale);
+  const status = readDocumentStatus(figma, fileKey, __PLUGIN_VERSION__, uiLocale);
   figma.ui.postMessage({
     type: 'status',
     connected,
@@ -97,7 +101,7 @@ async function runCommand(command: PluginCommand): Promise<void> {
   if (executing) return;
   executing = true;
   try {
-    const result = await executeCommand(figma, __PLUGIN_VERSION__, uiLocale, command);
+    const result = await executeCommand(figma, fileKey, __PLUGIN_VERSION__, uiLocale, command);
     await request<{ ok: boolean }>('/v1/plugin/result', { id: command.id, ok: true, result } satisfies PluginResult);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -116,7 +120,7 @@ async function poll(): Promise<void> {
   if (polling) return;
   polling = true;
   try {
-    const response = await request<{ command: PluginCommand | null }>('/v1/plugin/poll', readDocumentStatus(figma, __PLUGIN_VERSION__, uiLocale));
+    const response = await request<{ command: PluginCommand | null }>('/v1/plugin/poll', readDocumentStatus(figma, fileKey, __PLUGIN_VERSION__, uiLocale));
     if (!connected) {
       connected = true;
       emitStatus();
@@ -142,7 +146,7 @@ figma.ui.onmessage = (message: { type?: string; requestId?: number; collapsed?: 
       emitStatus();
       break;
     case 'copy-prompt': {
-      const status = readDocumentStatus(figma, __PLUGIN_VERSION__, uiLocale);
+      const status = readDocumentStatus(figma, fileKey, __PLUGIN_VERSION__, uiLocale);
       if (!status.selectedNode) {
         emitStatus();
         figma.ui.postMessage({

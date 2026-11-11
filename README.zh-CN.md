@@ -70,9 +70,15 @@ claude mcp add --scope user figma-local -- figma-local-mcp
 
 界面语言默认跟随系统（`zh*` 为中文，否则英文），可通过插件头部的按钮切换并记忆；复制的 Prompt 模板与运行时提示也跟随该语言。
 
+支持同时连接多个文件：在每个打开的文件里运行插件，桥接服务会按 Figma 文件 key 为每个文件维护独立会话。`get_plugin_status` 会列出所有已连接文件及其 `fileKey`，最近活跃的文件是工具的默认目标；读取类工具都可以传可选的 `fileKey` 参数来锁定具体文件，避免读到别的文件的数据：
+
+```json
+{ "name": "get_design_context", "arguments": { "fileKey": "ABcDEF1234567", "nodeId": "1:23" } }
+```
+
 MCP 提供以下工具：
 
-- `get_plugin_status`：检查插件连接及当前选区。
+- `get_plugin_status`：列出已连接的文件、当前活跃文件 key 及其中的选区。
 - `get_selection`：读取当前选区。
 - `get_design_context`：读取布局、文本、样式、组件和变量绑定。
 - `get_variable_defs`：读取本地变量集合。

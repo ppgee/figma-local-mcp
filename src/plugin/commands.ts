@@ -27,10 +27,16 @@ export interface FigmaContext {
   };
 }
 
-export function readDocumentStatus(ctx: FigmaContext, pluginVersion: string, locale: Locale = 'en'): PluginDocumentStatus {
+export function readDocumentStatus(
+  ctx: FigmaContext,
+  fileKey: string,
+  pluginVersion: string,
+  locale: Locale = 'en',
+): PluginDocumentStatus {
   const selection = ctx.currentPage.selection;
   const selectedNode = selection.length === 1 ? selection[0] : null;
   return {
+    fileKey,
     fileName: ctx.root.name,
     pageId: ctx.currentPage.id,
     pageName: ctx.currentPage.name,
@@ -122,6 +128,7 @@ export async function exportNode(ctx: FigmaContext, args: Record<string, unknown
 
 export async function executeCommand(
   ctx: FigmaContext,
+  fileKey: string,
   pluginVersion: string,
   locale: Locale,
   command: PluginCommand,
@@ -131,7 +138,7 @@ export async function executeCommand(
   switch (command.name) {
     case 'get_selection':
       return {
-        document: readDocumentStatus(ctx, pluginVersion, locale),
+        document: readDocumentStatus(ctx, fileKey, pluginVersion, locale),
         selection: ctx.currentPage.selection.map(summarizeNode),
       };
     case 'get_design_context': {

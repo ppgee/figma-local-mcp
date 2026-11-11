@@ -44,6 +44,7 @@ export async function api(origin: string, path: string, options: ApiOptions = {}
 }
 
 export interface DocumentStatusInput {
+  fileKey?: string;
   locale?: 'zh' | 'en';
   fileName?: string;
   pageId?: string;
@@ -55,6 +56,7 @@ export interface DocumentStatusInput {
 
 export function documentStatus(overrides: DocumentStatusInput = {}): Record<string, unknown> {
   return {
+    fileKey: overrides.fileKey ?? 'file-key-1',
     locale: overrides.locale ?? 'en',
     fileName: overrides.fileName ?? '测试文件',
     pageId: overrides.pageId ?? '0:1',

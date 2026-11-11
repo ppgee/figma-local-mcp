@@ -2,6 +2,22 @@
 
 Notable changes to this project. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows SemVer. On release, `release.yml` extracts the matching section as the GitHub Release body.
 
+## [0.5.0] - 2026-11-11
+
+### Added
+
+- Multi-file sessions: the bridge keeps one session per open Figma file (keyed by the file key reported by the plugin). Running the plugin in several files at the same time no longer mixes document statuses or silently routes commands to the wrong file.
+- `get_plugin_status` now lists every connected file with its `fileKey`, selection and queue depth, plus the `activeFileKey` (the most recently active file).
+- Tools that read a file (`get_selection`, `get_design_context`, `get_variable_defs`, `export_node`, `get_screenshot`) accept an optional `fileKey` argument to target a specific file; omitting it targets the most recently active file.
+- Commands are serialized per file and can execute in parallel across files.
+- When a file stops reporting (window closed), its session expires after 5 seconds and its queued commands fail immediately with a "file disconnected" error instead of waiting for the full timeout.
+- The plugin generates a stable synthetic file key for unsaved drafts (`figma.fileKey` is undefined there).
+
+### Changed
+
+- Bridge status shape: `/health` and `get_plugin_status` now return `{ connected, activeFileKey, files: [...] }` instead of a flat single-file status. The plugin and the local service must be updated together (`pnpm run install:local`); polls without a `fileKey` are rejected with a clear error.
+- `/v1/plugin/call` accepts and forwards an optional `fileKey` for multi-instance reuse.
+
 ## [0.4.0] - 2026-11-11
 
 ### Added

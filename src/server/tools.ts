@@ -11,12 +11,19 @@ import type { BridgeStatus, ExportPayload, PluginCommandName } from '../shared/p
 
 export interface BridgeLike {
   getStatus(): Promise<BridgeStatus>;
-  call(name: PluginCommandName, args: Record<string, unknown>, timeoutMs?: number): Promise<unknown>;
+  call(
+    name: PluginCommandName,
+    args: Record<string, unknown>,
+    timeoutMs?: number,
+    fileKey?: string,
+  ): Promise<unknown>;
   /** Locale reported by the plugin; drives localized runtime messages. */
   getLocale?(): Locale | null;
 }
 
 const nodeIdSchema = z.string().min(1).optional();
+const fileKeySchema = z.string().min(1).max(100).optional()
+  .describe('Optional key of the Figma file to target. Omit to use the most recently active file; see get_plugin_status.');
 
 function textResult(value: unknown): CallToolResult {
   return {
@@ -80,7 +87,7 @@ export function registerTools(server: McpServer, bridge: BridgeLike): void {
     'get_plugin_status',
     {
       title: 'Get local Figma plugin status',
-      description: 'Check whether the local Figma desktop bridge plugin is connected.',
+      description: 'Check which Figma files are connected through the local desktop plugin, which file is active, and the current selection in it.',
       inputSchema: {},
     },
     async () => textResult({ bridge: bridgeOrigin, ...await bridge.getStatus() }),
@@ -91,9 +98,12 @@ export function registerTools(server: McpServer, bridge: BridgeLike): void {
     {
       title: 'Get Figma selection',
       description: 'Read the current selection in the open Figma file through the local desktop plugin.',
-      inputSchema: {},
+      inputSchema: { fileKey: fileKeySchema },
     },
-    () => handleTool(async () => textResult(await bridge.call('get_selection', {}))),
+    (args) => handleTool(async () => {
+      const { fileKey, ...pluginArgs } = args;
+      return textResult(await bridge.call('get_selection', pluginArgs, undefined, fileKey));
+    }),
   );
 
   server.registerTool(
@@ -105,9 +115,13 @@ export function registerTools(server: McpServer, bridge: BridgeLike): void {
         nodeId: nodeIdSchema.describe('Optional Figma node ID. Omit to use the single selected node.'),
         maxDepth: z.number().int().min(0).max(20).default(6),
         maxNodes: z.number().int().min(1).max(2000).default(300),
+        fileKey: fileKeySchema,
       },
     },
-    (args) => handleTool(async () => textResult(await bridge.call('get_design_context', args))),
+    (args) => handleTool(async () => {
+      const { fileKey, ...pluginArgs } = args;
+      return textResult(await bridge.call('get_design_context', pluginArgs, undefined, fileKey));
+    }),
   );
 
   server.registerTool(
@@ -117,9 +131,13 @@ export function registerTools(server: McpServer, bridge: BridgeLike): void {
       description: 'Read local variable collections and variable values from the open Figma file.',
       inputSchema: {
         maxVariables: z.number().int().min(1).max(2000).default(200),
+        fileKey: fileKeySchema,
       },
     },
-    (args) => handleTool(async () => textResult(await bridge.call('get_variable_defs', args))),
+    (args) => handleTool(async () => {
+      const { fileKey, ...pluginArgs } = args;
+      return textResult(await bridge.call('get_variable_defs', pluginArgs, undefined, fileKey));
+    }),
   );
 
   server.registerTool(
@@ -131,11 +149,13 @@ export function registerTools(server: McpServer, bridge: BridgeLike): void {
         nodeId: nodeIdSchema,
         format: z.enum(['PNG', 'SVG', 'JPG', 'PDF']).default('PNG'),
         scale: z.number().min(0.01).max(4).default(1),
+        fileKey: fileKeySchema,
       },
     },
     (args) => handleTool(async () => {
+      const { fileKey, ...pluginArgs } = args;
       const currentLocale = locale();
-      const payload = validateExport(await bridge.call('export_node', args, 120_000), currentLocale);
+      const payload = validateExport(await bridge.call('export_node', pluginArgs, 120_000, fileKey), currentLocale);
       const path = await saveExport(payload, exportDirectory, currentLocale);
       return textResult({
         path,
@@ -156,15 +176,17 @@ export function registerTools(server: McpServer, bridge: BridgeLike): void {
       inputSchema: {
         nodeId: nodeIdSchema,
         maxDimension: z.number().int().min(128).max(2048).default(1200),
+        fileKey: fileKeySchema,
       },
     },
     (args) => handleTool(async () => {
+      const { fileKey, ...pluginArgs } = args;
       const payload = validateExport(await bridge.call('export_node', {
-        nodeId: args.nodeId,
+        nodeId: pluginArgs.nodeId,
         format: 'PNG',
         scale: 1,
-        maxDimension: args.maxDimension,
-      }, 120_000), locale());
+        maxDimension: pluginArgs.maxDimension,
+      }, 120_000, fileKey), locale());
       if (payload.byteLength > 8 * 1024 * 1024) {
         throw new Error(messages(locale()).screenshotTooLarge);
       }

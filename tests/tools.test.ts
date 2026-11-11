@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { BridgeStatus, ExportPayload, PluginCommandName } from '../src/shared/protocol.js';
+import type { BridgeStatus, ExportPayload, FileSessionStatus, PluginCommandName } from '../src/shared/protocol.js';
 import { documentStatus } from './helpers/http';
 
 const osState = vi.hoisted(() => ({ home: '' }));
@@ -24,13 +24,16 @@ let exportDirectory: string;
 let sandbox: string;
 
 class FakeBridge {
-  calls: Array<{ name: PluginCommandName; args: Record<string, unknown>; timeoutMs?: number }> = [];
+  calls: Array<{ name: PluginCommandName; args: Record<string, unknown>; timeoutMs?: number; fileKey?: string }> = [];
   status: BridgeStatus = {
-    ...documentStatus() as unknown as BridgeStatus,
     connected: true,
-    lastSeen: new Date().toISOString(),
-    queuedCommands: 0,
-    activeCommands: 0,
+    activeFileKey: 'file-key-1',
+    files: [{
+      ...documentStatus() as unknown as FileSessionStatus,
+      lastSeen: new Date().toISOString(),
+      queuedCommands: 0,
+      activeCommands: 0,
+    }],
   };
   result: unknown = {};
   error: Error | null = null;
@@ -44,8 +47,13 @@ class FakeBridge {
     return this.status;
   }
 
-  async call(name: PluginCommandName, args: Record<string, unknown>, timeoutMs?: number): Promise<unknown> {
-    this.calls.push({ name, args, timeoutMs });
+  async call(
+    name: PluginCommandName,
+    args: Record<string, unknown>,
+    timeoutMs?: number,
+    fileKey?: string,
+  ): Promise<unknown> {
+    this.calls.push({ name, args, timeoutMs, fileKey });
     if (this.error) throw this.error;
     return this.result;
   }
@@ -124,15 +132,22 @@ describe('tool registration and status', () => {
     ]);
   });
 
-  it('get_plugin_status returns the bridge origin and status', async () => {
+  it('get_plugin_status returns the bridge origin and the connected files', async () => {
     const bridge = new FakeBridge();
     await connect(bridge);
-    const status = parseText<{ bridge: string; connected: boolean; fileName: string }>(
-      await client.callTool({ name: 'get_plugin_status', arguments: {} }),
-    );
+    const status = parseText<{
+      bridge: string;
+      connected: boolean;
+      activeFileKey: string;
+      files: Array<{ fileKey: string; fileName: string; selectionCount: number }>;
+    }>(await client.callTool({ name: 'get_plugin_status', arguments: {} }));
     expect(status.bridge).toBe('http://localhost:3846');
     expect(status.connected).toBe(true);
-    expect(status.fileName).toBe('测试文件');
+    expect(status.activeFileKey).toBe('file-key-1');
+    expect(status.files).toHaveLength(1);
+    expect(status.files[0].fileKey).toBe('file-key-1');
+    expect(status.files[0].fileName).toBe('测试文件');
+    expect(status.files[0].selectionCount).toBe(1);
   });
 
   it('get_selection passes the plugin result through', async () => {
@@ -159,6 +174,23 @@ describe('parameter validation and forwarding', () => {
     expect(bridge.calls[1].args).toMatchObject({ nodeId: '9:9', maxDepth: 3, maxNodes: 300 });
   });
 
+  it('forwards an optional fileKey and strips it from plugin args', async () => {
+    const bridge = new FakeBridge();
+    await connect(bridge);
+
+    await client.callTool({ name: 'get_design_context', arguments: { nodeId: '9:9', fileKey: 'file-b' } });
+    expect(bridge.calls[0].fileKey).toBe('file-b');
+    expect(bridge.calls[0].args).toMatchObject({ nodeId: '9:9', maxDepth: 6, maxNodes: 300 });
+    expect(bridge.calls[0].args.fileKey).toBeUndefined();
+
+    await client.callTool({ name: 'get_selection', arguments: {} });
+    expect(bridge.calls[1].fileKey).toBeUndefined();
+
+    await client.callTool({ name: 'export_node', arguments: { fileKey: 'file-b' } });
+    expect(bridge.calls[2].fileKey).toBe('file-b');
+    expect(bridge.calls[2].args.fileKey).toBeUndefined();
+  });
+
   it('out-of-range parameters are rejected by validation', async () => {
     await connect(new FakeBridge());
     const depth = (await client.callTool({ name: 'get_design_context', arguments: { maxDepth: 21 } })) as ToolText;
@@ -170,6 +202,9 @@ describe('parameter validation and forwarding', () => {
 
     const format = (await client.callTool({ name: 'export_node', arguments: { format: 'WEBP' } })) as ToolText;
     expect(format.isError).toBe(true);
+
+    const fileKey = (await client.callTool({ name: 'get_selection', arguments: { fileKey: '' } })) as ToolText;
+    expect(fileKey.isError).toBe(true);
   });
 
   it('returns isError with the original message when bridge.call throws', async () => {
@@ -179,6 +214,16 @@ describe('parameter validation and forwarding', () => {
     const result = (await client.callTool({ name: 'get_selection', arguments: {} })) as ToolText;
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toBe('插件执行失败：找不到节点');
+  });
+
+  it('surfaces file-not-connected errors for unknown file keys', async () => {
+    const bridge = new FakeBridge();
+    bridge.error = new Error('No connected Figma file matches fileKey "nope". Call get_plugin_status to list connected files.');
+    await connect(bridge);
+    const result = (await client.callTool({ name: 'get_selection', arguments: { fileKey: 'nope' } })) as ToolText;
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('matches fileKey "nope"');
+    expect(bridge.calls[0].fileKey).toBe('nope');
   });
 });
 
@@ -245,9 +290,14 @@ describe('export_node and get_screenshot', () => {
     const bridge = new FakeBridge();
     bridge.result = payload({ data: Buffer.from([1, 2, 3, 4]).toString('base64'), byteLength: 4 });
     await connect(bridge);
-    const result = (await client.callTool({ name: 'get_screenshot', arguments: { maxDimension: 800 } })) as ToolText;
+    const result = (await client.callTool({
+      name: 'get_screenshot',
+      arguments: { maxDimension: 800, fileKey: 'file-b' },
+    })) as ToolText;
     expect(bridge.calls[0].name).toBe('export_node');
+    expect(bridge.calls[0].fileKey).toBe('file-b');
     expect(bridge.calls[0].args).toMatchObject({ format: 'PNG', scale: 1, maxDimension: 800 });
+    expect(bridge.calls[0].args.fileKey).toBeUndefined();
     expect(result.content[0].type).toBe('text');
     expect(JSON.parse(result.content[0].text as string)).toMatchObject({ nodeId: '1:23' });
     expect(result.content[1]).toMatchObject({ type: 'image', mimeType: 'image/png' });

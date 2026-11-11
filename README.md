@@ -70,9 +70,15 @@ The plugin shows the current selection live. With no selection or multiple layer
 
 The UI language follows your system locale (Chinese for `zh*`, English otherwise) and can be switched with the toggle in the plugin header; the choice is remembered. The copied prompt template and runtime messages follow the same language.
 
+Multiple files can be connected at once: run the plugin in each open file and the bridge keeps a separate session per file (keyed by the Figma file key). `get_plugin_status` lists every connected file with its `fileKey`; the most recently active file is the default target for tools. Tools that read a file accept an optional `fileKey` argument to pin the exact file, so designs are never read from the wrong one:
+
+```json
+{ "name": "get_design_context", "arguments": { "fileKey": "ABcDEF1234567", "nodeId": "1:23" } }
+```
+
 MCP tools:
 
-- `get_plugin_status`: check plugin connection and current selection.
+- `get_plugin_status`: list connected files, the active file key and the current selection in it.
 - `get_selection`: read the current selection.
 - `get_design_context`: read layout, text, styles, components and variable bindings.
 - `get_variable_defs`: read local variable collections.
