@@ -1,6 +1,6 @@
 {
   "name": "figma-local-mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Read Figma Desktop designs through a local MCP bridge.",
   "packageManager": "pnpm@9.15.9",
   "private": true,
@@ -32,5 +32,6 @@
     "esbuild": "0.28.2",
     "typescript": "^5.9.3",
     "vitest": "^5.1.0"
-  }
+  },
+  "license": "MIT"
 }

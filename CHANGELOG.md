@@ -2,6 +2,16 @@
 
 本项目的显著变更记录。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循语义化版本。发布时由 `release.yml` 提取对应版本小节作为 GitHub Release 正文。
 
+## [0.2.1] - 2026-11-11
+
+### 新增
+
+- 采用 MIT 许可证：新增 `LICENSE` 文件，`package.json` 增加 `license` 字段。
+
+### 变更
+
+- 历史提交邮箱统一为 GitHub noreply 地址，为公开仓库做准备；因历史改写，tag 与 Release 重建（v0.2.0 Release 内容已并入本页记录）。
+
 ## [0.2.0] - 2026-11-11
 
 ### 新增
