@@ -1,49 +1,51 @@
 # Figma Local MCP
 
-通过 Figma 桌面端插件和本地 MCP 服务，让编程 Agent 读取当前文件中的设计结构、变量和节点截图。使用 Figma Plugin API，不调用 Figma REST API，也不消耗 Figma 在线 MCP 额度。
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-目前提供只读查询和本地导出功能，不支持修改 Figma 设计。
+Let coding agents read designs, variables and node screenshots from the currently open Figma file, through a Figma desktop plugin and a local MCP service. Uses the Figma Plugin API — no Figma REST API, no official MCP quota consumption.
 
-## 环境要求
+Currently read-only: design queries and local exports. It does not modify Figma files.
+
+## Requirements
 
 - macOS
-- Figma 桌面客户端
-- Node.js 22 或更高版本
+- Figma desktop app
+- Node.js 22 or newer
 - pnpm
 
-## 安装
+## Install
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm run install:local
 ```
 
-首次安装后，在 Figma 桌面客户端选择 **Plugins → Development → Import plugin from manifest...**，导入：
+After the first install, in the Figma desktop app choose **Plugins → Development → Import plugin from manifest...** and select:
 
 ```text
 ~/figma-local-mcp-app/manifest.json
 ```
 
-然后运行 **Plugins → Development → Figma Local MCP Bridge**，等待插件显示“本地 MCP 服务已连接”。使用时不要关闭插件窗口，可以点击收起按钮缩小窗口。
+Then run **Plugins → Development → Figma Local MCP Bridge** and wait until the plugin shows the local service is connected. Keep the plugin window open while using it; you can collapse it to a mini bar.
 
-安装程序会创建以下内容：
+The installer creates:
 
-- MCP 命令：`~/.local/bin/figma-local-mcp`
-- 本地配置：`~/.local/share/figma-local-mcp/config.json`
-- 导出目录：`~/.local/share/figma-local-mcp/exports`
-- Figma 插件：`~/figma-local-mcp-app`
+- MCP command: `~/.local/bin/figma-local-mcp`
+- Local config: `~/.local/share/figma-local-mcp/config.json`
+- Export directory: `~/.local/share/figma-local-mcp/exports`
+- Figma plugin: `~/figma-local-mcp-app`
 
-确保 `~/.local/bin` 已加入 `PATH`。移动源码目录不会影响已安装的命令或插件。
+Make sure `~/.local/bin` is on your `PATH`. Moving the source directory does not affect the installed command or plugin.
 
-## 配置 Agent
+## Configure your agent
 
-Claude Code 可以直接注册命令，无需写源码的绝对路径：
+Claude Code can register the command directly — no absolute source paths:
 
 ```bash
 claude mcp add --scope user figma-local -- figma-local-mcp
 ```
 
-其他支持 stdio MCP 的客户端可以使用等价配置：
+Other stdio MCP clients can use the equivalent config:
 
 ```json
 {
@@ -56,76 +58,80 @@ claude mcp add --scope user figma-local -- figma-local-mcp
 }
 ```
 
-每个客户端会启动自己的 MCP 进程，并复用同一个本地桥接服务。不要在 MCP 配置中填写插件令牌。
+Each client starts its own MCP process and reuses the same local bridge. Do not put the plugin token into MCP config.
 
-## 使用
+## Usage
 
-1. 在 Figma 中选中一个图层。
-2. 点击“复制节点 Prompt”，或按 `Cmd/Ctrl + Shift + C`。收起状态下也可以复制。
-3. 将 Prompt 直接粘贴给已配置 `figma-local` 的 Agent。
+1. Select a layer in Figma.
+2. Click "Copy node prompt", or press `Cmd/Ctrl + Shift + C`. Copy also works while collapsed.
+3. Paste the prompt straight into any agent configured with `figma-local`.
 
-插件会实时显示当前选区。未选中图层或选中多个图层时，复制按钮不可用。
+The plugin shows the current selection live. With no selection or multiple layers selected, copy is disabled.
 
-MCP 提供以下工具：
+MCP tools:
 
-- `get_plugin_status`：检查插件连接及当前选区。
-- `get_selection`：读取当前选区。
-- `get_design_context`：读取布局、文本、样式、组件和变量绑定。
-- `get_variable_defs`：读取本地变量集合。
-- `get_screenshot`：获取节点 PNG 截图。
-- `export_node`：将节点导出为 PNG、SVG、JPG 或 PDF。
+- `get_plugin_status`: check plugin connection and current selection.
+- `get_selection`: read the current selection.
+- `get_design_context`: read layout, text, styles, components and variable bindings.
+- `get_variable_defs`: read local variable collections.
+- `get_screenshot`: get a PNG screenshot of a node.
+- `export_node`: export a node as PNG, SVG, JPG or PDF.
 
-## 更新
+## Update
 
 ```bash
 pnpm run check
 pnpm run install:local
 ```
 
-更新后在 Figma 中重新运行插件即可，不需要重新导入 manifest，也不需要修改 Agent 的 MCP 配置。
+After updating, rerun the plugin in Figma — no manifest re-import, no MCP config changes.
 
-## 开发
-
-```bash
-pnpm run typecheck  # TypeScript 类型检查
-pnpm run build      # 构建 MCP 服务和插件到 dist/
-pnpm run check      # 类型检查并构建
-pnpm test           # 运行单元与集成测试（vitest）
-pnpm test:coverage  # 运行测试并输出覆盖率报告
-pnpm start          # 通过 stdio 启动 MCP 服务
-```
-
-主要目录：
-
-- `src/plugin/`：Figma 插件及界面。
-- `src/server/`：MCP 服务和本地桥接。
-- `src/shared/`：插件与服务端共享的协议类型。
-- `scripts/`：构建和本地安装脚本。
-- `tests/`：单元与集成测试。
-
-单元与集成测试覆盖节点序列化截断、插件命令执行、插件纯函数、本地配置校验、桥接认证/命令队列/超时/多实例复用，以及 MCP 工具参数校验与导出落盘。测试使用临时沙箱目录和随机回环端口，不会读写本机真实配置，也不会影响正在运行的服务。插件界面与轮询编排仍需在 Figma 桌面端人工验证。变更后至少运行 `pnpm run check` 与 `pnpm test`，并在 Figma 桌面端验证选区同步、Prompt 复制和 MCP 节点读取。
-
-## 持续集成与发布
-
-推送到 `main` 或提交 PR 时，GitHub Actions 会自动运行类型检查、构建与测试（`.github/workflows/ci.yml`）。
-
-发布通过打 tag 触发：
+## Development
 
 ```bash
-# 1. 同步更新三处版本号（package.json、scripts/build.mjs、src/server/index.ts）
-# 2. 在 CHANGELOG.md 增加对应版本的小节（作为 Release 正文）
-# 3. 提交并合入 main
-# 4. 打 tag 并推送
-git tag v0.2.0
-git push origin v0.2.0
+pnpm run typecheck  # TypeScript type check
+pnpm run build      # Build MCP service and plugin into dist/
+pnpm run check      # Type check and build
+pnpm test           # Unit and integration tests (vitest)
+pnpm test:coverage  # Tests with coverage report
+pnpm start          # Start the MCP service over stdio
 ```
 
-推送 `v*` tag 后，`release.yml` 会校验 tag 与 `package.json` 版本一致、CHANGELOG 存在对应小节，跑完 `pnpm check` 与 `pnpm test`，全部通过后创建 GitHub Release，正文取自 CHANGELOG 小节并附加自动生成的变更列表。版本不一致、缺 CHANGELOG 小节或测试失败时不会发布（三处版本号与 CHANGELOG 小节也有测试守卫）。
+Main directories:
 
-Release 不附带构建产物：插件构建产物内嵌本地令牌，不能对外分发；使用方按 README 从源码安装。
+- `src/plugin/`: Figma plugin and its UI.
+- `src/server/`: MCP service and local bridge.
+- `src/shared/`: protocol types shared by plugin and server.
+- `scripts/`: build and local install scripts.
+- `tests/`: unit and integration tests.
 
-## 本地数据与安全
+Tests cover node serialization truncation, plugin command execution, plugin pure helpers, local config validation, bridge auth/command queue/timeouts/multi-instance reuse, and MCP tool parameter validation with export file writing. Tests use sandbox directories and random loopback ports — they never touch your real config or running services. The plugin UI and polling orchestration still need manual verification in the Figma desktop app. After changes, run at least `pnpm run check` and `pnpm test`, and verify selection sync, prompt copy and MCP node reads in Figma.
 
-桥接服务仅监听 `127.0.0.1:3846`，插件使用随机令牌认证。令牌保存在用户数据目录，不随源码提交；构建时写入 `dist/` 中的插件产物，因此 `dist/` 也被 Git 忽略。
+## CI and releases
 
-本服务不主动将设计数据上传到远程服务。Agent 如何处理收到的设计内容，取决于对应 MCP 客户端和模型服务。
+Pushes and PRs to `main` run type check, build and tests on GitHub Actions (`.github/workflows/ci.yml`).
+
+Releases are triggered by tags:
+
+```bash
+# 1. Bump the version in all three places (package.json, scripts/build.mjs, src/server/index.ts)
+# 2. Add a matching section to CHANGELOG.md (it becomes the release body)
+# 3. Commit and merge into main
+# 4. Tag and push
+git tag v0.3.0
+git push origin v0.3.0
+```
+
+On a `v*` tag, `release.yml` verifies the tag matches `package.json`, that CHANGELOG.md has the matching section, then runs `pnpm check` and `pnpm test`. If everything passes it creates the GitHub Release with the CHANGELOG section as the body, plus auto-generated change lists. Mismatched versions, a missing CHANGELOG section or failing tests block the release (both invariants are also guarded by tests).
+
+Releases never attach build artifacts: plugin builds embed the local token and must not be distributed; users install from source per this README.
+
+## Local data and security
+
+The bridge listens on `127.0.0.1:3846` only, and the plugin authenticates with a random token. The token lives in the user data directory and is never committed; it is baked into the plugin build under `dist/`, which is why `dist/` stays Git-ignored.
+
+This service never uploads design data to remote servers. How MCP clients and models handle returned content is outside this service's control.
+
+## License
+
+[MIT](LICENSE)

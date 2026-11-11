@@ -49,7 +49,7 @@ function command(name: string, args: Record<string, unknown> = {}): PluginComman
 }
 
 describe('readDocumentStatus', () => {
-  it('单选时返回选中节点并带插件版本', () => {
+  it('returns the selected node with the plugin version for a single selection', () => {
     const status = readDocumentStatus(makeCtx({ selection: [makeNode({ id: '9:9', name: '首页' })] }), PLUGIN_VERSION);
     expect(status).toEqual({
       fileName: '测试文件',
@@ -61,7 +61,7 @@ describe('readDocumentStatus', () => {
     });
   });
 
-  it('空选与多选时 selectedNode 为空但保留数量', () => {
+  it('nulls selectedNode for empty and multi selection while keeping the count', () => {
     expect(readDocumentStatus(makeCtx({ selection: [] }), PLUGIN_VERSION).selectedNode).toBeNull();
     const multi = readDocumentStatus(makeCtx({ selection: [makeNode(), makeNode()] }), PLUGIN_VERSION);
     expect(multi.selectedNode).toBeNull();
@@ -70,38 +70,38 @@ describe('readDocumentStatus', () => {
 });
 
 describe('resolveSceneNode', () => {
-  it('未指定 nodeId 时空选与多选分别报错', async () => {
-    await expect(resolveSceneNode(makeCtx({ selection: [] }))).rejects.toThrow(/请先在 Figma 中选中/);
-    await expect(resolveSceneNode(makeCtx({ selection: [makeNode(), makeNode()] }))).rejects.toThrow(/请只选中一个/);
+  it('errors for empty and multi selection when nodeId is omitted', async () => {
+    await expect(resolveSceneNode(makeCtx({ selection: [] }))).rejects.toThrow(/Select a Frame or layer in Figma first/);
+    await expect(resolveSceneNode(makeCtx({ selection: [makeNode(), makeNode()] }))).rejects.toThrow(/Select only one/);
   });
 
-  it('未指定 nodeId 时使用当前唯一选区', async () => {
+  it('uses the sole current selection when nodeId is omitted', async () => {
     const node = await resolveSceneNode(makeCtx({ selection: [makeNode({ id: '2:2' })] }));
     expect(node.id).toBe('2:2');
   });
 
-  it('指定 nodeId 时按 ID 解析，不依赖选区', async () => {
+  it('resolves by ID regardless of the current selection', async () => {
     const ctx = makeCtx({ selection: [], nodes: { '3:3': makeNode({ id: '3:3' }) } });
     const node = await resolveSceneNode(ctx, '3:3');
     expect(node.id).toBe('3:3');
   });
 
-  it('找不到节点或命中页面/文档时报错', async () => {
-    await expect(resolveSceneNode(makeCtx({ nodes: {} }), '4:4')).rejects.toThrow(/找不到节点 4:4/);
+  it('errors when the node is missing or is a page/document', async () => {
+    await expect(resolveSceneNode(makeCtx({ nodes: {} }), '4:4')).rejects.toThrow(/Node 4:4 not found/);
     const pageCtx = makeCtx({ nodes: { '0:2': { id: '0:2', type: 'PAGE', name: 'Page 2' } } });
-    await expect(resolveSceneNode(pageCtx, '0:2')).rejects.toThrow(/请提供 Frame 或其他画布图层/);
+    await expect(resolveSceneNode(pageCtx, '0:2')).rejects.toThrow(/not a page or document/);
   });
 });
 
 describe('executeCommand', () => {
-  it('get_selection 返回文档状态与选区摘要', async () => {
+  it('get_selection returns document status and selection summaries', async () => {
     const result = await executeCommand(makeCtx({ selection: [makeNode({ id: '5:5' })] }), PLUGIN_VERSION, command('get_selection')) as Record<string, any>;
     expect(result.document).toMatchObject({ fileName: '测试文件', selectionCount: 1 });
     expect(result.selection).toHaveLength(1);
     expect(result.selection[0]).toMatchObject({ id: '5:5', type: 'FRAME' });
   });
 
-  it('get_design_context 使用上下文文档信息与默认参数', async () => {
+  it('get_design_context uses context document info and default options', async () => {
     const result = await executeCommand(makeCtx(), PLUGIN_VERSION, command('get_design_context')) as Record<string, any>;
     expect(result.document).toEqual({ fileName: '测试文件', pageId: '0:1', pageName: 'Page 1' });
     expect(result.maxDepth).toBe(6);
@@ -109,7 +109,7 @@ describe('executeCommand', () => {
     expect(result.root).toMatchObject({ id: '1:1' });
   });
 
-  it('get_design_context 支持 nodeId 与自定义深度', async () => {
+  it('get_design_context supports nodeId and custom depth', async () => {
     const ctx = makeCtx({
       selection: [],
       nodes: { '7:7': makeNode({ id: '7:7', children: [makeNode({ id: '7:8' })] }) },
@@ -120,7 +120,7 @@ describe('executeCommand', () => {
     expect(result.maxDepth).toBe(0);
   });
 
-  it('get_variable_defs 映射集合与变量并支持截断', async () => {
+  it('get_variable_defs maps collections and variables with truncation', async () => {
     const variables = Array.from({ length: 5 }, (_, index) => ({
       id: `v${index}`,
       name: `变量${index}`,
@@ -155,7 +155,7 @@ describe('executeCommand', () => {
     expect(result.truncated).toBe(true);
   });
 
-  it('get_variable_defs 默认上限 200 且空集合返回零', async () => {
+  it('get_variable_defs defaults to 200 max and returns zero for empty sets', async () => {
     const result = await executeCommand(makeCtx({ variables: [], collections: [] }), PLUGIN_VERSION, command('get_variable_defs')) as Record<string, any>;
     expect(result.variables).toEqual([]);
     expect(result.collections).toEqual([]);
@@ -163,7 +163,7 @@ describe('executeCommand', () => {
     expect(result.truncated).toBe(false);
   });
 
-  it('export_node 返回 base64 数据与正确 MIME', async () => {
+  it('export_node returns base64 data with the right MIME type', async () => {
     const result = await executeCommand(
       makeCtx({ selection: [makeNode({ id: '8:8', name: '图标', exportAsync: async () => new Uint8Array([1, 2, 3]) })] }),
       PLUGIN_VERSION,
@@ -180,7 +180,7 @@ describe('executeCommand', () => {
     });
   });
 
-  it('export_node 按 maxDimension 缩小倍率并匹配 SVG MIME', async () => {
+  it('export_node scales down by maxDimension and matches the SVG MIME type', async () => {
     const calls: Array<Record<string, unknown>> = [];
     const node = makeNode({
       id: '8:9',
@@ -199,14 +199,14 @@ describe('executeCommand', () => {
     expect(result.scale).toBe(0.5);
   });
 
-  it('export_node 超过 12 MiB 时报错', async () => {
+  it('export_node errors above 12 MiB', async () => {
     const big = makeNode({ exportAsync: async () => new Uint8Array(12 * 1024 * 1024 + 1) });
     await expect(
       executeCommand(makeCtx({ selection: [big] }), PLUGIN_VERSION, command('export_node', {})),
-    ).rejects.toThrow(/超过.*限制/);
+    ).rejects.toThrow(/exceeding.*limit/);
   });
 
-  it('未知命令报错', async () => {
-    await expect(executeCommand(makeCtx(), PLUGIN_VERSION, command('run_js'))).rejects.toThrow(/不支持的命令：run_js/);
+  it('errors on unknown commands', async () => {
+    await expect(executeCommand(makeCtx(), PLUGIN_VERSION, command('run_js'))).rejects.toThrow(/Unsupported command: run_js/);
   });
 });

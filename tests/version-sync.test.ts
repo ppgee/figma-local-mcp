@@ -7,12 +7,12 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 function readVersion(source: string, pattern: RegExp, where: string): string {
   const match = source.match(pattern);
-  if (!match) throw new Error(`未在 ${where} 中找到版本号。`);
+  if (!match) throw new Error(`No version string found in ${where}.`);
   return match[1];
 }
 
-describe('版本号同步', () => {
-  it('package.json、构建脚本与服务端入口的版本号保持一致', () => {
+describe('version sync', () => {
+  it('keeps package.json, build script and server entry versions in sync', () => {
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version: string };
     const build = readFileSync(join(root, 'scripts/build.mjs'), 'utf8');
     const server = readFileSync(join(root, 'src/server/index.ts'), 'utf8');
@@ -27,11 +27,11 @@ describe('版本号同步', () => {
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  it('CHANGELOG.md 包含当前版本的小节', () => {
+  it('CHANGELOG.md has a section for the current version', () => {
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version: string };
     const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
     const section = changelog.split(/^## \[/m).find((part) => part.startsWith(`${pkg.version}]`));
-    expect(section, `CHANGELOG.md 缺少 ## [${pkg.version}] 小节`).toBeTruthy();
+    expect(section, `CHANGELOG.md is missing a ## [${pkg.version}] section`).toBeTruthy();
     expect((section ?? '').trim().length).toBeGreaterThan(20);
   });
 });

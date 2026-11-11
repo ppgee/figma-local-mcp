@@ -105,8 +105,8 @@ function payload(overrides: Partial<ExportPayload>): ExportPayload {
   };
 }
 
-describe('工具注册与状态读取', () => {
-  it('注册 6 个只读工具', async () => {
+describe('tool registration and status', () => {
+  it('registers the six read-only tools', async () => {
     await connect(new FakeBridge());
     const listed = await client.listTools();
     expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
@@ -119,7 +119,7 @@ describe('工具注册与状态读取', () => {
     ]);
   });
 
-  it('get_plugin_status 返回桥接地址与状态', async () => {
+  it('get_plugin_status returns the bridge origin and status', async () => {
     const bridge = new FakeBridge();
     await connect(bridge);
     const status = parseText<{ bridge: string; connected: boolean; fileName: string }>(
@@ -130,7 +130,7 @@ describe('工具注册与状态读取', () => {
     expect(status.fileName).toBe('测试文件');
   });
 
-  it('get_selection 透传插件结果', async () => {
+  it('get_selection passes the plugin result through', async () => {
     const bridge = new FakeBridge();
     bridge.result = { selection: [{ id: '1:1' }] };
     await connect(bridge);
@@ -142,8 +142,8 @@ describe('工具注册与状态读取', () => {
   });
 });
 
-describe('参数校验与转发', () => {
-  it('get_design_context 应用默认参数并透传指定参数', async () => {
+describe('parameter validation and forwarding', () => {
+  it('get_design_context applies defaults and forwards explicit args', async () => {
     const bridge = new FakeBridge();
     await connect(bridge);
     await client.callTool({ name: 'get_design_context', arguments: {} });
@@ -154,7 +154,7 @@ describe('参数校验与转发', () => {
     expect(bridge.calls[1].args).toMatchObject({ nodeId: '9:9', maxDepth: 3, maxNodes: 300 });
   });
 
-  it('越界参数被校验层拒绝', async () => {
+  it('out-of-range parameters are rejected by validation', async () => {
     await connect(new FakeBridge());
     const depth = (await client.callTool({ name: 'get_design_context', arguments: { maxDepth: 21 } })) as ToolText;
     expect(depth.isError).toBe(true);
@@ -167,7 +167,7 @@ describe('参数校验与转发', () => {
     expect(format.isError).toBe(true);
   });
 
-  it('bridge.call 抛错时返回 isError 与原始消息', async () => {
+  it('returns isError with the original message when bridge.call throws', async () => {
     const bridge = new FakeBridge();
     bridge.error = new Error('插件执行失败：找不到节点');
     await connect(bridge);
@@ -177,8 +177,8 @@ describe('参数校验与转发', () => {
   });
 });
 
-describe('export_node 与 get_screenshot', () => {
-  it('导出结果落盘到导出目录并消毒文件名', async () => {
+describe('export_node and get_screenshot', () => {
+  it('saves exports into the export directory with sanitized file names', async () => {
     const bridge = new FakeBridge();
     bridge.result = payload({ nodeName: '组件/A<B>:"x"?.png' });
     await connect(bridge);
@@ -194,7 +194,7 @@ describe('export_node 与 get_screenshot', () => {
     expect(bridge.calls[0].timeoutMs).toBe(120_000);
   });
 
-  it('超长节点名按字节钳制，总文件名不超过 255 字节', async () => {
+  it('clamps long node names by bytes; total file name stays within 255 bytes', async () => {
     const bridge = new FakeBridge();
     bridge.result = payload({ nodeName: '名'.repeat(120) });
     await connect(bridge);
@@ -207,26 +207,26 @@ describe('export_node 与 get_screenshot', () => {
     expect(name.length).toBe(40);
   });
 
-  it('无效导出结果、长度不符与超限时返回错误', async () => {
+  it('errors on invalid payloads, length mismatches and oversized results', async () => {
     const bridge = new FakeBridge();
     bridge.result = { nope: true };
     await connect(bridge);
     let result = (await client.callTool({ name: 'export_node', arguments: {} })) as ToolText;
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('无效的导出结果');
+    expect(result.content[0].text).toContain('invalid export result');
 
     bridge.result = payload({ byteLength: 999 });
     result = (await client.callTool({ name: 'export_node', arguments: {} })) as ToolText;
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('长度校验失败');
+    expect(result.content[0].text).toContain('length check');
 
     bridge.result = payload({ byteLength: 12 * 1024 * 1024 + 1 });
     result = (await client.callTool({ name: 'export_node', arguments: {} })) as ToolText;
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('超过大小限制');
+    expect(result.content[0].text).toContain('exceeds the size limit');
   });
 
-  it('get_screenshot 以 PNG 图片块返回并复用 export_node 通道', async () => {
+  it('get_screenshot returns a PNG image block via the export_node channel', async () => {
     const bridge = new FakeBridge();
     bridge.result = payload({ data: Buffer.from([1, 2, 3, 4]).toString('base64'), byteLength: 4 });
     await connect(bridge);
@@ -239,18 +239,18 @@ describe('export_node 与 get_screenshot', () => {
     expect(result.content[1].data).toBe(Buffer.from([1, 2, 3, 4]).toString('base64'));
   });
 
-  it('截图超过 8 MiB 时返回错误并建议降低尺寸', async () => {
+  it('errors when a screenshot exceeds 8 MiB', async () => {
     const bridge = new FakeBridge();
     bridge.result = payload({ byteLength: 8 * 1024 * 1024 + 1 });
     await connect(bridge);
     const result = (await client.callTool({ name: 'get_screenshot', arguments: {} })) as ToolText;
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('截图超过 8 MiB');
+    expect(result.content[0].text).toContain('exceeds 8 MiB');
   });
 });
 
-describe('saveExport / validateExport 单元行为', () => {
-  it('saveExport 写入指定目录并保持内容一致', async () => {
+describe('saveExport / validateExport unit behavior', () => {
+  it('saveExport writes to the given directory with matching content', async () => {
     const directory = join(sandbox, 'custom-exports');
     const path = await saveExport(payload({ nodeName: '干净名称' }), directory);
     expect(path.startsWith(directory)).toBe(true);
@@ -258,9 +258,9 @@ describe('saveExport / validateExport 单元行为', () => {
     expect(await readFile(path, 'utf8')).toBe('hello');
   });
 
-  it('validateExport 拒绝非对象与缺字段结果', () => {
-    expect(() => validateExport(null)).toThrow(/无效的导出结果/);
-    expect(() => validateExport({ data: 'xx' })).toThrow(/无效的导出结果/);
-    expect(() => validateExport({ data: 'xx', byteLength: 12 * 1024 * 1024 + 1 })).toThrow(/超过大小限制/);
+  it('validateExport rejects non-objects and missing fields', () => {
+    expect(() => validateExport(null)).toThrow(/invalid export result/);
+    expect(() => validateExport({ data: 'xx' })).toThrow(/invalid export result/);
+    expect(() => validateExport({ data: 'xx', byteLength: 12 * 1024 * 1024 + 1 })).toThrow(/exceeds the size limit/);
   });
 });

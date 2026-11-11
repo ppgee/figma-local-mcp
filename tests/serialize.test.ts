@@ -25,7 +25,7 @@ function makeNode(overrides: Record<string, unknown> = {}): SceneNode {
 }
 
 describe('cloneValue', () => {
-  it('原样返回基础类型', () => {
+  it('passes primitives through unchanged', () => {
     expect(cloneValue(null)).toBeNull();
     expect(cloneValue('text')).toBe('text');
     expect(cloneValue(42)).toBe(42);
@@ -33,21 +33,21 @@ describe('cloneValue', () => {
     expect(cloneValue(undefined)).toBeUndefined();
   });
 
-  it('把 figma.mixed 符号转换为标记对象', () => {
+  it('converts the figma.mixed symbol to a marker object', () => {
     expect(cloneValue(mixed)).toEqual({ mixed: true });
   });
 
-  it('把其他符号转换为描述字符串', () => {
+  it('converts other symbols to their description strings', () => {
     expect(cloneValue(Symbol('custom'))).toBe('custom');
   });
 
-  it('bigint 转换为字符串，函数被丢弃', () => {
+  it('stringifies bigint and drops functions', () => {
     expect(cloneValue(10n)).toBe('10');
     expect(cloneValue(() => 'x')).toBeUndefined();
     expect(cloneValue({ keep: 1, drop: () => 2 })).toEqual({ keep: 1 });
   });
 
-  it('递归克隆数组与嵌套对象', () => {
+  it('recursively clones arrays and nested objects', () => {
     const value = { list: [1, { inner: 'x' }], nested: { deep: { n: null } } };
     const cloned = cloneValue(value) as typeof value;
     expect(cloned).toEqual(value);
@@ -55,17 +55,17 @@ describe('cloneValue', () => {
     expect(cloned.nested).not.toBe(value.nested);
   });
 
-  it('对象中值为 undefined 的键被移除', () => {
+  it('drops keys with undefined values', () => {
     expect(cloneValue({ a: 1, b: undefined })).toEqual({ a: 1 });
   });
 
-  it('循环引用被替换为占位符', () => {
+  it('replaces circular references with a placeholder', () => {
     const value: Record<string, unknown> = { name: 'root' };
     value.self = value;
     expect(cloneValue(value)).toEqual({ name: 'root', self: '[Circular]' });
   });
 
-  it('同级不同对象不误判为循环引用', () => {
+  it('does not misjudge sibling references as circular', () => {
     const shared = { id: 'shared' };
     const cloned = cloneValue({ a: shared, b: shared }) as Record<string, unknown>;
     expect(cloned).toEqual({ a: { id: 'shared' }, b: { id: 'shared' } });
@@ -73,7 +73,7 @@ describe('cloneValue', () => {
 });
 
 describe('summarizeNode', () => {
-  it('返回节点摘要字段', () => {
+  it('returns the node summary fields', () => {
     expect(summarizeNode(makeNode({ id: '2:9', name: '按钮', type: 'RECTANGLE' }))).toEqual({
       id: '2:9',
       name: '按钮',
@@ -85,7 +85,7 @@ describe('summarizeNode', () => {
 });
 
 describe('createDesignContext', () => {
-  it('返回文档信息、根节点与统计字段', () => {
+  it('returns document info, root node and stats', () => {
     const root = makeNode({ id: '9:9', name: '首页', children: [] });
     const context = createDesignContext(root, { maxDepth: 6, maxNodes: 300 }, documentInfo);
     expect(context.document).toEqual({ fileName: '测试文件', pageId: '0:1', pageName: 'Page 1' });
@@ -96,7 +96,7 @@ describe('createDesignContext', () => {
     expect(context.maxNodes).toBe(300);
   });
 
-  it('只输出白名单键，忽略多余属性', () => {
+  it('only outputs whitelisted keys, ignoring extra properties', () => {
     const root = makeNode({ secret: 'nope', customField: 1, children: [] });
     const context = createDesignContext(root, { maxDepth: 6, maxNodes: 300 }, documentInfo);
     const serialized = context.root as Record<string, unknown>;
@@ -105,7 +105,7 @@ describe('createDesignContext', () => {
     expect(serialized).toHaveProperty('absoluteBoundingBox');
   });
 
-  it('TEXT 节点带文本键，非 TEXT 节点不带', () => {
+  it('TEXT nodes carry text keys; others do not', () => {
     const text = createDesignContext(
       makeNode({ type: 'TEXT', characters: '你好', fontSize: 14, children: [] }),
       { maxDepth: 2, maxNodes: 10 },
@@ -123,7 +123,7 @@ describe('createDesignContext', () => {
     expect(frame).not.toHaveProperty('fontSize');
   });
 
-  it('INSTANCE/COMPONENT 节点带组件键', () => {
+  it('INSTANCE/COMPONENT nodes carry component keys', () => {
     const instance = createDesignContext(
       makeNode({ type: 'INSTANCE', key: 'abc123', children: [] }),
       { maxDepth: 2, maxNodes: 10 },
@@ -139,7 +139,7 @@ describe('createDesignContext', () => {
     expect(group).not.toHaveProperty('key');
   });
 
-  it('达到 maxDepth 时标记 childrenTruncated 并停止递归', () => {
+  it('marks childrenTruncated and stops recursing at maxDepth', () => {
     const grandchild = makeNode({ id: '3:3', name: 'grandchild' });
     const child = makeNode({ id: '2:2', name: 'child', children: [grandchild] });
     const root = makeNode({ id: '1:1', name: 'root', children: [child] });
@@ -154,7 +154,7 @@ describe('createDesignContext', () => {
     expect(context.truncated).toBe(true);
   });
 
-  it('maxDepth 为 0 时根节点即截断', () => {
+  it('truncates at the root when maxDepth is 0', () => {
     const root = makeNode({ children: [makeNode({ id: '2:2' }), makeNode({ id: '2:3' })] });
     const context = createDesignContext(root, { maxDepth: 0, maxNodes: 100 }, documentInfo);
     const serialized = context.root as Record<string, unknown>;
@@ -163,7 +163,7 @@ describe('createDesignContext', () => {
     expect(context.nodesVisited).toBe(1);
   });
 
-  it('达到 maxNodes 时截断并列出遗漏数量', () => {
+  it('truncates at maxNodes and reports omitted children', () => {
     const children = ['a', 'b', 'c', 'd', 'e'].map((n, index) => makeNode({ id: `2:${index}`, name: n }));
     const root = makeNode({ children });
     const context = createDesignContext(root, { maxDepth: 4, maxNodes: 3 }, documentInfo);
@@ -175,7 +175,7 @@ describe('createDesignContext', () => {
     expect(context.truncated).toBe(true);
   });
 
-  it('空 children 数组不产生截断标记', () => {
+  it('no truncation markers for empty children arrays', () => {
     const root = makeNode({ children: [] });
     const context = createDesignContext(root, { maxDepth: 2, maxNodes: 10 }, documentInfo);
     const serialized = context.root as Record<string, unknown>;

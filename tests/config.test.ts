@@ -30,22 +30,22 @@ afterEach(async () => {
   await rm(sandbox, { recursive: true, force: true });
 });
 
-describe('本地配置加载', () => {
-  it('缺少配置时报错并提示安装命令', async () => {
-    await expect(import('../src/server/config.js')).rejects.toThrow(/缺少本地配置/);
+describe('local config loading', () => {
+  it('fails with an install hint when config is missing', async () => {
+    await expect(import('../src/server/config.js')).rejects.toThrow(/Missing local config/);
   });
 
-  it('令牌格式非法时报错', async () => {
+  it('fails on an invalid token format', async () => {
     await writeConfig({ port: 3846, token: 'z'.repeat(63) });
-    await expect(import('../src/server/config.js')).rejects.toThrow(/本地配置无效/);
+    await expect(import('../src/server/config.js')).rejects.toThrow(/Invalid local config/);
   });
 
-  it('端口不是 3846 时报错', async () => {
+  it('fails when the port is not 3846', async () => {
     await writeConfig({ port: 9999, token: 'a'.repeat(64) });
-    await expect(import('../src/server/config.js')).rejects.toThrow(/本地配置无效/);
+    await expect(import('../src/server/config.js')).rejects.toThrow(/Invalid local config/);
   });
 
-  it('合法配置导出端口、令牌、桥接地址与导出目录', async () => {
+  it('exports port, token, bridge origin and export directory for a valid config', async () => {
     const token = 'c'.repeat(64);
     await writeConfig({ port: 3846, token });
     const config = await import('../src/server/config.js');

@@ -12,7 +12,7 @@ export interface ApiOptions {
 }
 
 /**
- * 向本地桥接发起 HTTP 请求；token 传 null 表示不带 Authorization 头。
+ * Issue an HTTP request against the local bridge; pass token: null to omit the Authorization header.
  */
 export async function api(origin: string, path: string, options: ApiOptions = {}): Promise<ApiResponse> {
   const headers: Record<string, string> = {};

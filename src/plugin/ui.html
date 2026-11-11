@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -120,21 +120,21 @@
       <header class="app-header">
         <div class="brand">
           <span class="brand-mark"><svg class="icon"><use href="#icon-bridge"/></svg></span>
-          <div><h1>Figma Local MCP</h1><p class="brand-caption">连接画布与你的 Agent</p></div>
+          <div><h1>Figma Local MCP</h1><p class="brand-caption">Connect canvas to your agents</p></div>
         </div>
         <div class="window-actions">
-          <button id="collapse-window" class="icon-button" type="button" title="收起为小状态条" aria-label="收起窗口"><svg class="icon"><use href="#icon-collapse"/></svg></button>
+          <button id="collapse-window" class="icon-button" type="button" title="Collapse to mini bar" aria-label="Collapse window"><svg class="icon"><use href="#icon-collapse"/></svg></button>
         </div>
       </header>
 
       <div id="connection" class="connection" data-state="connecting" role="status">
         <span class="connection-dot" data-connection-dot data-state="connecting"></span>
-        <span id="connection-label">正在连接本地服务…</span>
-        <button id="retry" type="button" hidden>重试</button>
+        <span id="connection-label">Connecting to local service…</span>
+        <button id="retry" type="button" hidden>Retry</button>
       </div>
 
-      <section class="selection-card" aria-label="当前选中节点">
-        <div class="section-heading"><span>当前选中</span><span class="live-label">实时同步</span></div>
+      <section class="selection-card" aria-label="Current selection">
+        <div class="section-heading"><span>Current selection</span><span class="live-label">Live</span></div>
         <div id="single-selection" hidden>
           <div class="node-row">
             <span class="node-symbol"><svg class="icon"><use href="#icon-frame"/></svg></span>
@@ -144,28 +144,28 @@
         </div>
         <div id="empty-selection" class="empty-selection">
           <svg class="icon"><use href="#icon-cursor"/></svg>
-          <p id="empty-title">正在读取选区…</p>
-          <p id="empty-description">请在 Figma 画布中选择一个图层</p>
+          <p id="empty-title">Reading selection…</p>
+          <p id="empty-description">Select a layer on the Figma canvas</p>
         </div>
-        <button id="copy-prompt" class="primary-button" type="button" disabled><svg class="icon"><use href="#icon-copy"/></svg><span>复制节点 Prompt</span></button>
-        <p class="copy-hint">点击时读取最新选区 · <kbd id="shortcut">⌘ ⇧ C</kbd></p>
+        <button id="copy-prompt" class="primary-button" type="button" disabled><svg class="icon"><use href="#icon-copy"/></svg><span>Copy node prompt</span></button>
+        <p class="copy-hint">Re-reads selection on click · <kbd id="shortcut">⌘ ⇧ C</kbd></p>
       </section>
 
       <details id="prompt-details" class="prompt-section" open>
-        <summary><svg class="icon"><use href="#icon-collapse"/></svg><span>Prompt 预览</span><span class="summary-hint">直接粘贴给 Agent</span></summary>
-        <pre id="prompt-preview">选中一个图层后，这里会显示可复制的 Prompt。</pre>
-        <textarea id="manual-prompt" readonly aria-label="手动复制节点 Prompt" spellcheck="false" hidden></textarea>
-        <p id="manual-help" hidden>自动复制不可用，文本已全选，请按 <span class="manual-shortcut">⌘ C</span> 复制。</p>
+        <summary><svg class="icon"><use href="#icon-collapse"/></svg><span>Prompt preview</span><span class="summary-hint">Paste straight to an agent</span></summary>
+        <pre id="prompt-preview">Select a layer to see the copyable prompt here.</pre>
+        <textarea id="manual-prompt" readonly aria-label="Manually copy the node prompt" spellcheck="false" hidden></textarea>
+        <p id="manual-help" hidden>Auto-copy unavailable; text is selected — press <span class="manual-shortcut">⌘ C</span> to copy.</p>
       </details>
 
-      <footer class="app-footer"><span id="document-context">本地 Plugin API</span><span class="local-label">不消耗官方额度</span></footer>
+      <footer class="app-footer"><span id="document-context">Local Plugin API</span><span class="local-label">No official quota</span></footer>
     </main>
 
-    <section id="collapsed" aria-label="已收起的 Figma Local MCP" hidden>
+    <section id="collapsed" aria-label="Collapsed Figma Local MCP" hidden>
       <span class="connection-dot" data-connection-dot data-state="connecting"></span>
-      <div class="compact-node"><span id="compact-node-name">正在读取选区…</span><span id="compact-node-detail">Figma Local MCP</span></div>
-      <button id="compact-copy" type="button" disabled><svg class="icon"><use href="#icon-copy"/></svg><span>复制</span></button>
-      <button id="expand-window" class="icon-button" type="button" title="展开窗口" aria-label="展开窗口"><svg class="icon"><use href="#icon-expand"/></svg></button>
+      <div class="compact-node"><span id="compact-node-name">Reading selection…</span><span id="compact-node-detail">Figma Local MCP</span></div>
+      <button id="compact-copy" type="button" disabled><svg class="icon"><use href="#icon-copy"/></svg><span>Copy</span></button>
+      <button id="expand-window" class="icon-button" type="button" title="Expand window" aria-label="Expand window"><svg class="icon"><use href="#icon-expand"/></svg></button>
     </section>
     <div id="toast" role="status" aria-live="polite" hidden></div>
 
@@ -211,11 +211,11 @@
           $('compact-copy').disabled = disabled;
           $('copy-prompt').setAttribute('aria-busy', String(copying));
           if (copying) {
-            $('copy-prompt').innerHTML = `${icon('copy')}<span>正在复制…</span>`;
-            $('compact-copy').innerHTML = `${icon('copy')}<span>复制中</span>`;
+            $('copy-prompt').innerHTML = `${icon('copy')}<span>Copying…</span>`;
+            $('compact-copy').innerHTML = `${icon('copy')}<span>Copying</span>`;
           } else {
-            $('copy-prompt').innerHTML = `${icon('copy')}<span>复制节点 Prompt</span>`;
-            $('compact-copy').innerHTML = `${icon('copy')}<span>复制</span>`;
+            $('copy-prompt').innerHTML = `${icon('copy')}<span>Copy node prompt</span>`;
+            $('compact-copy').innerHTML = `${icon('copy')}<span>Copy</span>`;
           }
         }
 
@@ -227,28 +227,28 @@
 
         function renderSelection() {
           const node = state.selectedNode;
-          $('document-context').textContent = state.ready ? `${state.fileName} / ${state.pageName}` : '本地 Plugin API';
+          $('document-context').textContent = state.ready ? `${state.fileName} / ${state.pageName}` : 'Local Plugin API';
           $('document-context').title = $('document-context').textContent;
           $('single-selection').hidden = !node;
           $('empty-selection').hidden = Boolean(node);
           if (node) {
-            $('node-name').textContent = node.name || '未命名节点';
+            $('node-name').textContent = node.name || 'Untitled node';
             $('node-name').title = node.name;
             $('node-type').textContent = node.type;
             $('node-id').textContent = node.id;
-            $('compact-node-name').textContent = node.name || '未命名节点';
+            $('compact-node-name').textContent = node.name || 'Untitled node';
             $('compact-node-name').title = node.name;
             $('compact-node-detail').textContent = `${node.type} · ${node.id}`;
           } else {
             const multiple = state.selectionCount > 1;
-            $('empty-title').textContent = state.ready ? (multiple ? `已选中 ${state.selectionCount} 个图层` : '尚未选中图层') : '正在读取选区…';
-            $('empty-description').textContent = multiple ? '请只保留一个选中的图层' : '请在 Figma 画布中选择一个图层';
-            $('compact-node-name').textContent = state.ready ? (multiple ? `已选 ${state.selectionCount} 个图层` : '未选中图层') : '正在读取选区…';
-            $('compact-node-detail').textContent = multiple ? '请只选择一个图层' : 'Figma Local MCP';
+            $('empty-title').textContent = state.ready ? (multiple ? `${state.selectionCount} layers selected` : 'No selection') : 'Reading selection…';
+            $('empty-description').textContent = multiple ? 'Keep only one layer selected' : 'Select a layer on the Figma canvas';
+            $('compact-node-name').textContent = state.ready ? (multiple ? `${state.selectionCount} selected` : 'No selection') : 'Reading selection…';
+            $('compact-node-detail').textContent = multiple ? 'Select one layer only' : 'Figma Local MCP';
           }
           if (renderedPrompt !== state.prompt) {
             renderedPrompt = state.prompt;
-            $('prompt-preview').textContent = state.prompt || '选中一个图层后，这里会显示可复制的 Prompt。';
+            $('prompt-preview').textContent = state.prompt || 'Select a layer to see the copyable prompt here.';
             $('manual-prompt').value = state.prompt;
             hideManualPrompt();
             clearFeedback();
@@ -259,11 +259,11 @@
         function renderConnection() {
           const connectionState = state.connected ? 'connected' : (state.ready ? 'disconnected' : 'connecting');
           $('connection').dataset.state = connectionState;
-          $('connection-label').textContent = state.connected ? '本地 MCP 服务已连接' : (state.ready ? '本地 MCP 服务未连接' : '正在连接本地服务…');
+          $('connection-label').textContent = state.connected ? 'Local MCP service connected' : (state.ready ? 'Local MCP service disconnected' : 'Connecting to local service…');
           $('retry').hidden = state.connected || !state.ready;
           document.querySelectorAll('[data-connection-dot]').forEach((dot) => {
             dot.dataset.state = connectionState;
-            dot.title = state.connected ? '本地服务已连接' : '本地服务未连接';
+            dot.title = state.connected ? 'Local service connected' : 'Local service disconnected';
           });
         }
 
@@ -284,7 +284,7 @@
         function requestCopy() {
           if (copying) return;
           if (!state.selectedNode) {
-            showToast(state.selectionCount > 1 ? '请只选中一个图层后再复制' : '请先在 Figma 中选中一个图层', 'error');
+            showToast(state.selectionCount > 1 ? 'Select only one layer, then copy' : 'Select a layer in Figma first', 'error');
             return;
           }
           setCopying(true);
@@ -293,7 +293,7 @@
             if (requestId !== activeCopyId) return;
             activeCopyId += 1;
             setCopying(false);
-            showToast('未能读取最新选区，请重试。', 'error');
+            showToast('Could not read the latest selection; try again.', 'error');
           }, 5000);
           send('copy-prompt', { requestId });
         }
@@ -322,18 +322,18 @@
         }
 
         function showCopiedFeedback() {
-          const name = state.selectedNode ? state.selectedNode.name || '未命名节点' : '节点';
+          const name = state.selectedNode ? state.selectedNode.name || 'Untitled node' : 'node';
           $('copy-prompt').classList.add('copied');
-          $('copy-prompt').innerHTML = `${icon('check')}<span>已复制，去粘贴吧</span>`;
-          $('compact-copy').innerHTML = `${icon('check')}<span>已复制</span>`;
-          showToast(`已复制「${name}」的 Prompt`);
+          $('copy-prompt').innerHTML = `${icon('check')}<span>Copied — go paste</span>`;
+          $('compact-copy').innerHTML = `${icon('check')}<span>Copied</span>`;
+          showToast(`Prompt for "${name}" copied`);
         }
 
         async function receivePrompt(message) {
           if (message.requestId !== activeCopyId) return;
           setCopying(false);
           if (!message.prompt) {
-            showToast('当前选区无法生成 Prompt，请重新选择。', 'error');
+            showToast('Cannot build a prompt for this selection; reselect.', 'error');
             return;
           }
           const copied = await copyText(message.prompt);
@@ -349,9 +349,9 @@
             $('manual-help').hidden = false;
             $('manual-prompt').focus();
             $('manual-prompt').select();
-            showToast('自动复制不可用，请手动复制已全选的文本。', 'error');
+            showToast('Auto-copy unavailable; copy the selected text manually.', 'error');
           } else {
-            showToast('选区已变化，请重新点击复制。', 'error');
+            showToast('Selection changed; click copy again.', 'error');
           }
         }
 
@@ -390,11 +390,11 @@
         $('compact-copy').addEventListener('click', requestCopy);
         $('retry').addEventListener('click', () => {
           $('retry').disabled = true;
-          $('retry').textContent = '连接中…';
+          $('retry').textContent = 'Connecting…';
           send('retry');
           setTimeout(() => {
             $('retry').disabled = false;
-            $('retry').textContent = '重试';
+            $('retry').textContent = 'Retry';
           }, 1200);
         });
         $('collapse-window').addEventListener('click', () => send('set-view', { collapsed: true }));

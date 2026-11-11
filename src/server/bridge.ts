@@ -53,7 +53,7 @@ async function readJson(request: IncomingMessage): Promise<Record<string, unknow
   }
 
   if (tooLarge) {
-    throw Object.assign(new Error('请求体过大。'), { statusCode: 413 });
+    throw Object.assign(new Error('Request body too large.'), { statusCode: 413 });
   }
   if (chunks.length === 0) return {};
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
@@ -125,7 +125,7 @@ export class PluginBridge {
     if (this.remoteFallback) return;
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
-      pending.reject(new Error('本地 MCP 服务已关闭。'));
+      pending.reject(new Error('Local MCP service is shutting down.'));
     }
     this.pending.clear();
     this.queue.length = 0;
@@ -148,7 +148,7 @@ export class PluginBridge {
       return payload.result;
     }
     if (!this.isConnected()) {
-      throw new Error('Figma 插件未连接。请运行 Figma Local MCP Bridge 插件（窗口可收起），并确认本地服务已启动。');
+      throw new Error('Figma plugin not connected. Run the Figma Local MCP Bridge plugin (the window can be collapsed) and make sure the local service is running.');
     }
 
     const id = randomUUID();
@@ -158,7 +158,7 @@ export class PluginBridge {
         this.active.delete(id);
         const index = this.queue.indexOf(id);
         if (index >= 0) this.queue.splice(index, 1);
-        reject(new Error(`插件命令 ${name} 执行超时。`));
+        reject(new Error(`Plugin command ${name} timed out.`));
       }, timeoutMs);
       this.pending.set(id, { name, args, resolve, reject, timer });
       this.queue.push(id);
@@ -181,7 +181,7 @@ export class PluginBridge {
       signal: AbortSignal.timeout(timeoutMs),
     });
     const payload = await response.json() as Record<string, unknown> & { error?: string };
-    if (!response.ok) throw new Error(payload.error || `已有桥接返回 ${response.status}`);
+    if (!response.ok) throw new Error(payload.error || `Existing bridge returned ${response.status}`);
     return payload;
   }
 
@@ -203,7 +203,7 @@ export class PluginBridge {
   private async getRemoteStatus(): Promise<BridgeStatus> {
     const payload = await this.requestBridge('GET', '/health');
     if (payload.ok !== true || payload.bridge !== this.origin || !payload.status) {
-      throw new Error(`端口 ${this.port} 已被其他服务占用。`);
+      throw new Error(`Port ${this.port} is occupied by another service.`);
     }
     return payload.status as BridgeStatus;
   }
@@ -228,7 +228,7 @@ export class PluginBridge {
       const authorization = request.headers.authorization ?? '';
       const supplied = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
       if (!tokensMatch(this.token, supplied)) {
-        sendJson(response, 401, { error: '未授权' });
+        sendJson(response, 401, { error: 'Unauthorized' });
         return;
       }
 
@@ -240,7 +240,7 @@ export class PluginBridge {
       if (request.method === 'POST' && path === '/v1/plugin/call') {
         const body = await readJson(request);
         if (!commandNames.includes(body.name as PluginCommandName)) {
-          sendJson(response, 400, { error: '未知插件命令' });
+          sendJson(response, 400, { error: 'Unknown plugin command' });
           return;
         }
         const requestedTimeout = typeof body.timeoutMs === 'number' ? body.timeoutMs : 60_000;
@@ -266,12 +266,12 @@ export class PluginBridge {
         sendJson(response, 200, { ok: true });
         return;
       }
-      sendJson(response, 404, { error: '未知接口' });
+      sendJson(response, 404, { error: 'Unknown endpoint' });
     } catch (error) {
       const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
         ? Number(error.statusCode)
         : 400;
-      const message = error instanceof Error ? error.message : '请求失败';
+      const message = error instanceof Error ? error.message : 'Request failed';
       if (!response.headersSent) sendJson(response, statusCode, { error: message.slice(0, 500) });
     }
   }
@@ -315,14 +315,14 @@ export class PluginBridge {
   private acceptResult(result: PluginResult): void {
     const pending = this.pending.get(result.id);
     if (!pending || !this.active.delete(result.id)) {
-      throw Object.assign(new Error('未知或已过期的命令结果。'), { statusCode: 404 });
+      throw Object.assign(new Error('Unknown or expired command result.'), { statusCode: 404 });
     }
     clearTimeout(pending.timer);
     this.pending.delete(result.id);
     if (result.ok) {
       pending.resolve(result.result);
     } else {
-      pending.reject(new Error((result.error || '插件执行失败。').slice(0, 2000)));
+      pending.reject(new Error((result.error || 'Plugin execution failed.').slice(0, 2000)));
     }
   }
 }

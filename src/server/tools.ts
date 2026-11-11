@@ -34,15 +34,15 @@ async function handleTool(action: () => Promise<CallToolResult>): Promise<CallTo
 export function validateExport(value: unknown): ExportPayload {
   const payload = value as ExportPayload;
   if (!payload || typeof payload.data !== 'string' || typeof payload.byteLength !== 'number') {
-    throw new Error('插件返回了无效的导出结果。');
+    throw new Error('The plugin returned an invalid export result.');
   }
-  if (payload.byteLength > 12 * 1024 * 1024) throw new Error('导出结果超过大小限制。');
+  if (payload.byteLength > 12 * 1024 * 1024) throw new Error('Export result exceeds the size limit.');
   return payload;
 }
 
 /**
- * 把名称钳制到给定的 UTF-8 字节数内（按码点边界截断），避免中文等多字节名称
- * 触发 Linux/macOS 文件名长度上限（ENAMETOOLONG）。
+ * Clamp a name to the given number of UTF-8 bytes (cutting at code point boundaries)
+ * so multi-byte names never hit the Linux/macOS file name length limit (ENAMETOOLONG).
  */
 function clampNameBytes(name: string, maxBytes: number): string {
   if (Buffer.byteLength(name, 'utf8') <= maxBytes) return name;
@@ -56,7 +56,7 @@ function clampNameBytes(name: string, maxBytes: number): string {
 
 export async function saveExport(payload: ExportPayload, directory: string = exportDirectory): Promise<string> {
   const data = Buffer.from(payload.data, 'base64');
-  if (data.length !== payload.byteLength) throw new Error('导出结果的长度校验失败。');
+  if (data.length !== payload.byteLength) throw new Error('Export result failed the length check.');
   await mkdir(directory, { recursive: true });
   const extension = payload.format.toLowerCase();
   const safeName = clampNameBytes(
@@ -159,7 +159,7 @@ export function registerTools(server: McpServer, bridge: BridgeLike): void {
         maxDimension: args.maxDimension,
       }, 120_000));
       if (payload.byteLength > 8 * 1024 * 1024) {
-        throw new Error('截图超过 8 MiB，请降低 maxDimension，或改用 export_node 保存文件。');
+        throw new Error('Screenshot exceeds 8 MiB; lower maxDimension, or use export_node to save a file instead.');
       }
       return {
         content: [

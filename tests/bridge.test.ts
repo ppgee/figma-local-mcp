@@ -32,7 +32,7 @@ async function pollUntilCommand(targetOrigin: string, token: string): Promise<Re
     if (response.body.command) return response.body.command as Record<string, unknown>;
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  throw new Error('轮询超时：命令未进入队列。');
+  throw new Error('Polling timed out: no command entered the queue.');
 }
 
 async function health(token = TOKEN) {
@@ -82,26 +82,26 @@ afterEach(async () => {
   await bridge.close();
 });
 
-describe('认证与基础路由', () => {
-  it('缺少令牌返回 401', async () => {
+describe('auth and basic routing', () => {
+  it('returns 401 without a token', async () => {
     const response = await api(origin, '/health', { token: null });
     expect(response.status).toBe(401);
-    expect(response.body.error).toBe('未授权');
+    expect(response.body.error).toBe('Unauthorized');
   });
 
-  it('令牌错误返回 401', async () => {
+  it('returns 401 with a wrong token', async () => {
     const response = await api(origin, '/health', { token: 'c'.repeat(64) });
     expect(response.status).toBe(401);
   });
 
-  it('OPTIONS 预检返回 204 并带 CORS 头', async () => {
+  it('returns 204 with CORS headers for OPTIONS preflight', async () => {
     const response = await api(origin, '/health', { method: 'OPTIONS', token: null });
     expect(response.status).toBe(204);
     expect(response.headers.get('access-control-allow-origin')).toBe('*');
     expect(response.headers.get('cache-control')).toBe('no-store');
   });
 
-  it('初始健康状态为未连接且队列为空', async () => {
+  it('starts disconnected with empty queues', async () => {
     const body = await health();
     expect(body.ok).toBe(true);
     expect(body.bridge).toBe(origin);
@@ -112,32 +112,32 @@ describe('认证与基础路由', () => {
     expect(body.status.activeCommands).toBe(0);
   });
 
-  it('未知接口与非插件命令分别返回 404 与 400', async () => {
+  it('returns 404 for unknown endpoints and 400 for unknown commands', async () => {
     expect((await api(origin, '/nope', { method: 'GET', token: TOKEN })).status).toBe(404);
     expect((await api(origin, '/health', { method: 'PUT', body: {}, token: TOKEN })).status).toBe(404);
     const bad = await api(origin, '/v1/plugin/call', { method: 'POST', body: { name: 'run_js', args: {} }, token: TOKEN });
     expect(bad.status).toBe(400);
-    expect(bad.body.error).toBe('未知插件命令');
+    expect(bad.body.error).toBe('Unknown plugin command');
   });
 
-  it('非法 JSON 请求体返回 400', async () => {
+  it('returns 400 for invalid JSON bodies', async () => {
     const response = await api(origin, '/v1/plugin/poll', { method: 'POST', rawBody: '{"broken":', token: TOKEN });
     expect(response.status).toBe(400);
   });
 
-  it('超过 32 MiB 的请求体返回 413', async () => {
+  it('returns 413 for bodies over 32 MiB', async () => {
     const response = await api(origin, '/v1/plugin/poll', {
       method: 'POST',
       rawBody: 'a'.repeat(33 * 1024 * 1024),
       token: TOKEN,
     });
     expect(response.status).toBe(413);
-    expect(response.body.error).toBe('请求体过大。');
+    expect(response.body.error).toBe('Request body too large.');
   });
 });
 
-describe('插件状态同步', () => {
-  it('poll 上报文档状态并返回空命令', async () => {
+describe('plugin status sync', () => {
+  it('poll reports document status and returns no command', async () => {
     const response = await pluginPoll();
     expect(response.status).toBe(200);
     expect(response.body.command).toBeNull();
@@ -151,7 +151,7 @@ describe('插件状态同步', () => {
     expect(body.status.lastSeen).not.toBeNull();
   });
 
-  it('超长字段与非法枚举被钳制或归零', async () => {
+  it('clamps oversized fields and zeroes invalid counts', async () => {
     await pluginPoll(TOKEN, documentStatus({
       fileName: 'f'.repeat(600),
       pageId: 'p'.repeat(200),
@@ -170,7 +170,7 @@ describe('插件状态同步', () => {
     expect((await health()).status.selectionCount).toBe(0);
   });
 
-  it('超过 5 秒未上报后视为未连接', async () => {
+  it('treats the plugin as disconnected after 5s without reports', async () => {
     await pluginPoll();
     expect((await health()).status.connected).toBe(true);
 
@@ -185,12 +185,12 @@ describe('插件状态同步', () => {
   });
 });
 
-describe('命令队列与结果', () => {
-  it('插件未连接时 call 直接拒绝', async () => {
-    await expect(bridge.call('get_selection', {})).rejects.toThrow(/插件未连接/);
+describe('command queue and results', () => {
+  it('call rejects while the plugin is not connected', async () => {
+    await expect(bridge.call('get_selection', {})).rejects.toThrow(/plugin not connected/);
   });
 
-  it('完整循环：排队、逐条下发、结果回传', async () => {
+  it('full cycle: queue, sequential dispatch, result delivery', async () => {
     await pluginPoll();
 
     const first = bridge.call('get_design_context', { nodeId: '1:1' }, 5000);
@@ -226,16 +226,16 @@ describe('命令队列与结果', () => {
     expect(body.status.activeCommands).toBe(0);
   });
 
-  it('重复或未知的结果 ID 返回 404', async () => {
+  it('duplicate or unknown result IDs return 404', async () => {
     await pluginPoll();
     const response = await pluginResult({ id: '00000000-0000-4000-8000-000000000000', ok: true });
     expect(response.status).toBe(404);
-    expect(response.body.error).toBe('未知或已过期的命令结果。');
+    expect(response.body.error).toBe('Unknown or expired command result.');
   });
 
-  it('命令超时后清理队列状态', async () => {
+  it('cleans up queue state after a command timeout', async () => {
     await pluginPoll();
-    await expect(bridge.call('get_selection', {}, 60)).rejects.toThrow(/执行超时/);
+    await expect(bridge.call('get_selection', {}, 60)).rejects.toThrow(/timed out/);
 
     const body = await health();
     expect(body.status.queuedCommands).toBe(0);
@@ -243,7 +243,7 @@ describe('命令队列与结果', () => {
     expect((await pluginPoll()).body.command).toBeNull();
   });
 
-  it('close() 拒绝所有挂起命令并关闭监听', async () => {
+  it('close() rejects pending commands and stops listening', async () => {
     await pluginPoll();
     const first = bridge.call('get_selection', {}, 10_000);
     const second = bridge.call('get_selection', {}, 10_000);
@@ -252,12 +252,12 @@ describe('命令队列与结果', () => {
     await Promise.resolve();
 
     await bridge.close();
-    await expect(first).rejects.toThrow(/本地 MCP 服务已关闭/);
-    await expect(second).rejects.toThrow(/本地 MCP 服务已关闭/);
+    await expect(first).rejects.toThrow(/shutting down/);
+    await expect(second).rejects.toThrow(/shutting down/);
     await expect(api(origin, '/health')).rejects.toThrow();
   });
 
-  it('/v1/plugin/call 直连端点等待结果后返回', async () => {
+  it('/v1/plugin/call waits for the result before responding', async () => {
     await pluginPoll();
     const pending = api(origin, '/v1/plugin/call', {
       method: 'POST',
@@ -272,13 +272,13 @@ describe('命令队列与结果', () => {
   });
 });
 
-describe('多实例复用', () => {
-  it('端口被同令牌实例占用时进入复用模式并转发命令', async () => {
+describe('multi-instance reuse', () => {
+  it('enters reuse mode behind a same-token instance and forwards commands', async () => {
     const token = 'd'.repeat(64);
     const primary = new PluginBridge({ port: 0, token });
     await primary.listen();
     const port = primary.boundPort;
-    if (port === null) throw new Error('未获取到监听端口。');
+    if (port === null) throw new Error('Failed to obtain the listening port.');
     const primaryOrigin = `http://localhost:${port}`;
 
     try {
@@ -307,15 +307,15 @@ describe('多实例复用', () => {
     }
   });
 
-  it('端口被不同令牌服务占用时拒绝启动', async () => {
+  it('refuses to start when the port is held by a different-token service', async () => {
     const token = 'e'.repeat(64);
     const primary = new PluginBridge({ port: 0, token });
     await primary.listen();
     const port = primary.boundPort;
-    if (port === null) throw new Error('未获取到监听端口。');
+    if (port === null) throw new Error('Failed to obtain the listening port.');
     try {
       const intruder = new PluginBridge({ port, token: 'f'.repeat(64) });
-      await expect(intruder.listen()).rejects.toThrow(/未授权|其他服务/);
+      await expect(intruder.listen()).rejects.toThrow(/Unauthorized|another service/);
     } finally {
       await primary.close();
     }

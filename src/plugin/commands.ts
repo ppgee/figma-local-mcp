@@ -9,7 +9,8 @@ import { base64Encode, computeExportScale } from './export';
 const MAX_EXPORT_BYTES = 12 * 1024 * 1024;
 
 /**
- * 插件命令执行所需的 Figma 上下文。生产环境传入全局 `figma`，测试注入模拟实现。
+ * Figma context required to execute plugin commands. Production passes the
+ * global `figma`; tests inject a mock implementation.
  */
 export interface FigmaContext {
   root: { name: string };
@@ -45,12 +46,12 @@ export function readDocumentStatus(ctx: FigmaContext, pluginVersion: string): Pl
 export async function resolveSceneNode(ctx: FigmaContext, nodeId?: string): Promise<SceneNode> {
   const selection = ctx.currentPage.selection;
   if (!nodeId && selection.length !== 1) {
-    throw new Error(selection.length === 0 ? '请先在 Figma 中选中一个 Frame 或图层。' : '请只选中一个 Frame 或图层。');
+    throw new Error(selection.length === 0 ? 'Select a Frame or layer in Figma first.' : 'Select only one Frame or layer.');
   }
   const node = nodeId ? await ctx.getNodeByIdAsync(nodeId) : selection[0];
-  if (!node) throw new Error(`找不到节点 ${nodeId}。`);
+  if (!node) throw new Error(`Node ${nodeId} not found.`);
   if (node.type === 'DOCUMENT' || node.type === 'PAGE') {
-    throw new Error('请提供 Frame 或其他画布图层的节点 ID，而不是页面或文档。');
+    throw new Error('Provide the node ID of a Frame or canvas layer, not a page or document.');
   }
   return node as SceneNode;
 }
@@ -97,7 +98,7 @@ export async function exportNode(ctx: FigmaContext, args: Record<string, unknown
   );
   const bytes = await node.exportAsync({ format, constraint: { type: 'SCALE', value: scale } });
   if (bytes.length > MAX_EXPORT_BYTES) {
-    throw new Error(`导出结果为 ${bytes.length} 字节，超过 ${MAX_EXPORT_BYTES} 字节限制；请缩小节点或降低导出倍率。`);
+    throw new Error(`Export result is ${bytes.length} bytes, exceeding the ${MAX_EXPORT_BYTES}-byte limit; shrink the node or lower the export scale.`);
   }
   const mimeType = {
     PNG: 'image/png',
@@ -144,6 +145,6 @@ export async function executeCommand(
     case 'export_node':
       return exportNode(ctx, args);
     default:
-      throw new Error(`不支持的命令：${String(command.name)}`);
+      throw new Error(`Unsupported command: ${String(command.name)}`);
   }
 }

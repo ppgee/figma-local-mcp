@@ -11,12 +11,12 @@ const dataRoot = join(homedir(), '.local', 'share', 'figma-local-mcp');
 const configPath = join(dataRoot, 'config.json');
 
 if (!existsSync(configPath)) {
-  throw new Error('缺少本地配置，请先运行 pnpm install:local。');
+  throw new Error('Missing local config; run pnpm install:local first.');
 }
 
 const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as Partial<LocalConfig>;
 if (parsed.port !== 3846 || typeof parsed.token !== 'string' || !/^[a-f0-9]{64}$/.test(parsed.token)) {
-  throw new Error('本地配置无效，请备份后删除固定安装目录中的 config.json，再重新安装。');
+  throw new Error('Invalid local config; back it up, delete config.json in the install directory, and reinstall.');
 }
 
 export const localConfig: LocalConfig = {

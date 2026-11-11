@@ -44,7 +44,7 @@ function setCollapsed(value: boolean): void {
   figma.ui.resize(value ? COLLAPSED_SIZE.width : EXPANDED_SIZE.width, value ? COLLAPSED_SIZE.height : EXPANDED_SIZE.height);
   figma.ui.postMessage({ type: 'view', collapsed });
   void figma.clientStorage.setAsync(VIEW_STORAGE_KEY, collapsed).catch(() => {
-    figma.ui.postMessage({ type: 'notice', message: '视图已切换，但无法保存窗口偏好。' });
+    figma.ui.postMessage({ type: 'notice', message: 'View switched, but the preference could not be saved.' });
   });
 }
 
@@ -58,7 +58,7 @@ async function request<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   const payload = await response.json() as T & { error?: string };
-  if (!response.ok) throw new Error(payload.error || `本地服务返回 ${response.status}`);
+  if (!response.ok) throw new Error(payload.error || `Local service returned ${response.status}`);
   return payload;
 }
 
@@ -116,7 +116,7 @@ figma.ui.onmessage = (message: { type?: string; requestId?: number; collapsed?: 
         figma.ui.postMessage({
           type: 'prompt-error',
           requestId: message.requestId,
-          message: status.selectionCount > 1 ? '请只选中一个图层后再复制。' : '请先在 Figma 中选中一个图层。',
+          message: status.selectionCount > 1 ? 'Select only one layer, then copy.' : 'Select a layer in Figma first.',
         });
         break;
       }

@@ -54,7 +54,7 @@ if (
   && !readFileSync(launcherPath, 'utf8').includes('.local/share/figma-local-mcp/app')
   && !readFileSync(launcherPath, 'utf8').includes('figma-local-mcp-app/dist/server/index.js')
 ) {
-  throw new Error(`${launcherPath} 已被其他程序占用，未覆盖。`);
+  throw new Error(`${launcherPath} is owned by another program; not overwritten.`);
 }
 
 const fallbackNode = process.execPath.replaceAll("'", "'\\''");
