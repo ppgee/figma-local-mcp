@@ -88,6 +88,20 @@ MCP tools:
 - `get_screenshot`: get a PNG screenshot of a node.
 - `export_node`: export a node as PNG, SVG, JPG or PDF.
 
+## When the plugin cannot be used
+
+| Scenario | Reason | Workaround |
+| --- | --- | --- |
+| Files where you only have view access | Figma requires edit access to run plugins | Ask the owner for edit access, or have someone with access export the frames; for read-only analysis, a Figma REST API based tool is an alternative |
+| FigJam files | This plugin only targets Figma design files (`editorType: figma`) | Copy the content into a Figma design file first |
+| Figma in the browser | Only the Figma desktop app is supported | Use the desktop app |
+| Plugins disabled by an organization admin | Enterprise settings can block third-party and development plugins | Ask your admin to allow development plugins |
+| Community preview pages and the mobile app | There is no plugin runtime | Open the file in the desktop app editor |
+| Offline | Figma itself requires a connection | Reconnect before using the plugin |
+| Another machine or a teammate's environment | This is a development plugin with a per-machine token; there is no published Community version | Clone the repo and run the install steps on that machine |
+
+Unsaved drafts work, but they have no `figma.fileKey`: the plugin falls back to a synthetic key that is stable for the current plugin run and changes when the plugin restarts. Save the file to get a stable `fileKey`.
+
 ## Update
 
 ```bash
