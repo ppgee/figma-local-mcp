@@ -23,6 +23,8 @@ This file defines how the repository is developed and verified. Installation, ag
 - `src/server/bridge.ts`: local HTTP bridge, auth, command queue and connection state; port and token are injectable via `BridgeOptions` (defaults come from local config).
 - `src/server/config.ts`: local configuration in the user data directory.
 - `src/shared/protocol.ts`: protocol types shared by plugin and server.
+- `src/shared/messages.ts`: bilingual runtime message catalog (single source for localized strings).
+- `src/plugin/i18n.ts`: locale resolution helper.
 - `scripts/build.mjs`, `scripts/install.mjs`: build and local install.
 - `tests/`: vitest unit and integration tests; `vitest.config.ts` configures coverage.
 - `.github/workflows/ci.yml`, `.github/workflows/release.yml`: CI and tag-triggered releases.
@@ -34,7 +36,7 @@ This file defines how the repository is developed and verified. Installation, ag
 - Use pnpm; do not generate other lockfiles with npm or Yarn. Dependency changes must update `pnpm-lock.yaml` with a stated reason.
 - Keep the existing TypeScript strict, ESM, esbuild and in-file code style; do not introduce new frameworks for local changes.
 - Do not hardcode user directories or machine paths in source; use `os.homedir()` where a home directory is needed.
-- User-facing strings (UI, prompts, error messages) are in English; documentation is English-first with a Chinese README (`README.zh-CN.md`).
+- User-facing runtime strings live in the shared bilingual catalog `src/shared/messages.ts` (the `zh` table is type-checked against `en`). The plugin UI has its own table in `ui.html` (it cannot import modules).
 - Protocol changes must update `src/shared/protocol.ts`, the plugin implementation and the runtime validation in `src/server/bridge.ts` together — types alone are not enough.
 - The version number exists in `package.json`, `scripts/build.mjs` and `src/server/index.ts` and must be bumped in sync; `tests/version-sync.test.ts` verifies all three match.
 
@@ -71,6 +73,7 @@ pnpm install:local             # Build and install into the fixed local director
 
 ## Plugin behavior constraints
 
+- The plugin UI language follows the system locale (`zh*` → Chinese, otherwise English) with a manual toggle persisted in clientStorage; the plugin reports its locale to the server, which localizes runtime messages accordingly (English fallback before the plugin connects).
 - With a single selection, show and copy the current node prompt; with an empty or multi selection, disable copy.
 - Re-read the current selection when copying — never use a cached stale node.
 - Update the UI promptly after `selectionchange` and `currentpagechange`.

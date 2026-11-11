@@ -49,6 +49,7 @@ async function health(token = TOKEN) {
       selectionCount: number;
       selectedNode: Record<string, unknown> | null;
       pluginVersion: string;
+      locale: string;
       lastSeen: string | null;
       queuedCommands: number;
       activeCommands: number;
@@ -255,6 +256,13 @@ describe('command queue and results', () => {
     await expect(first).rejects.toThrow(/shutting down/);
     await expect(second).rejects.toThrow(/shutting down/);
     await expect(api(origin, '/health')).rejects.toThrow();
+  });
+
+  it('localizes runtime messages using the locale reported by the plugin', async () => {
+    await pluginPoll(TOKEN, documentStatus({ locale: 'zh' }));
+    await expect(bridge.call('get_selection', {}, 60)).rejects.toThrow(/执行超时/);
+    const body = await health();
+    expect(body.status.locale).toBe('zh');
   });
 
   it('/v1/plugin/call waits for the result before responding', async () => {

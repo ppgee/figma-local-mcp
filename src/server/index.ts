@@ -7,7 +7,7 @@ import { bridgeOrigin } from './config.js';
 import { registerTools } from './tools.js';
 
 const bridge = new PluginBridge();
-const server = new McpServer({ name: 'figma-local-mcp', version: '0.3.0' });
+const server = new McpServer({ name: 'figma-local-mcp', version: '0.4.0' });
 registerTools(server, bridge);
 
 await bridge.listen();

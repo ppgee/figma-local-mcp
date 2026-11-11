@@ -50,6 +50,7 @@
       .window-actions { display: flex; gap: 2px; margin-right: -4px; }
       .icon-button { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); transition: background .15s, color .15s; }
       .icon-button:hover { background: var(--surface-secondary); color: var(--text); }
+      .lang-button { font-size: 11px; font-weight: 600; }
       .connection { display: flex; align-items: center; gap: 7px; min-height: 28px; margin-bottom: 12px; padding: 5px 9px; border-radius: 6px; background: var(--surface-secondary); color: var(--text-secondary); font-size: 11px; }
       .connection[data-state="connected"] { background: var(--success-bg); color: var(--success); }
       .connection[data-state="disconnected"] { background: var(--danger-bg); color: var(--danger); }
@@ -120,21 +121,22 @@
       <header class="app-header">
         <div class="brand">
           <span class="brand-mark"><svg class="icon"><use href="#icon-bridge"/></svg></span>
-          <div><h1>Figma Local MCP</h1><p class="brand-caption">Connect canvas to your agents</p></div>
+          <div><h1>Figma Local MCP</h1><p class="brand-caption" id="brand-caption"></p></div>
         </div>
         <div class="window-actions">
-          <button id="collapse-window" class="icon-button" type="button" title="Collapse to mini bar" aria-label="Collapse window"><svg class="icon"><use href="#icon-collapse"/></svg></button>
+          <button id="language-toggle" class="icon-button lang-button" type="button"><span id="language-label"></span></button>
+          <button id="collapse-window" class="icon-button" type="button"><svg class="icon"><use href="#icon-collapse"/></svg></button>
         </div>
       </header>
 
       <div id="connection" class="connection" data-state="connecting" role="status">
         <span class="connection-dot" data-connection-dot data-state="connecting"></span>
-        <span id="connection-label">Connecting to local service…</span>
-        <button id="retry" type="button" hidden>Retry</button>
+        <span id="connection-label"></span>
+        <button id="retry" type="button" hidden></button>
       </div>
 
-      <section class="selection-card" aria-label="Current selection">
-        <div class="section-heading"><span>Current selection</span><span class="live-label">Live</span></div>
+      <section class="selection-card" id="selection-card">
+        <div class="section-heading"><span id="selection-heading"></span><span class="live-label" id="live-label"></span></div>
         <div id="single-selection" hidden>
           <div class="node-row">
             <span class="node-symbol"><svg class="icon"><use href="#icon-frame"/></svg></span>
@@ -144,44 +146,161 @@
         </div>
         <div id="empty-selection" class="empty-selection">
           <svg class="icon"><use href="#icon-cursor"/></svg>
-          <p id="empty-title">Reading selection…</p>
-          <p id="empty-description">Select a layer on the Figma canvas</p>
+          <p id="empty-title"></p>
+          <p id="empty-description"></p>
         </div>
-        <button id="copy-prompt" class="primary-button" type="button" disabled><svg class="icon"><use href="#icon-copy"/></svg><span>Copy node prompt</span></button>
-        <p class="copy-hint">Re-reads selection on click · <kbd id="shortcut">⌘ ⇧ C</kbd></p>
+        <button id="copy-prompt" class="primary-button" type="button" disabled></button>
+        <p class="copy-hint"><span id="copy-hint-text"></span> · <kbd id="shortcut">⌘ ⇧ C</kbd></p>
       </section>
 
       <details id="prompt-details" class="prompt-section" open>
-        <summary><svg class="icon"><use href="#icon-collapse"/></svg><span>Prompt preview</span><span class="summary-hint">Paste straight to an agent</span></summary>
-        <pre id="prompt-preview">Select a layer to see the copyable prompt here.</pre>
-        <textarea id="manual-prompt" readonly aria-label="Manually copy the node prompt" spellcheck="false" hidden></textarea>
-        <p id="manual-help" hidden>Auto-copy unavailable; text is selected — press <span class="manual-shortcut">⌘ C</span> to copy.</p>
+        <summary><svg class="icon"><use href="#icon-collapse"/></svg><span id="prompt-summary"></span><span class="summary-hint" id="paste-hint"></span></summary>
+        <pre id="prompt-preview"></pre>
+        <textarea id="manual-prompt" readonly spellcheck="false" hidden></textarea>
+        <p id="manual-help" hidden><span id="manual-prefix"></span> <span class="manual-shortcut">⌘ C</span> <span id="manual-suffix"></span></p>
       </details>
 
-      <footer class="app-footer"><span id="document-context">Local Plugin API</span><span class="local-label">No official quota</span></footer>
+      <footer class="app-footer"><span id="document-context"></span><span class="local-label" id="local-label"></span></footer>
     </main>
 
-    <section id="collapsed" aria-label="Collapsed Figma Local MCP" hidden>
+    <section id="collapsed" hidden>
       <span class="connection-dot" data-connection-dot data-state="connecting"></span>
-      <div class="compact-node"><span id="compact-node-name">Reading selection…</span><span id="compact-node-detail">Figma Local MCP</span></div>
-      <button id="compact-copy" type="button" disabled><svg class="icon"><use href="#icon-copy"/></svg><span>Copy</span></button>
-      <button id="expand-window" class="icon-button" type="button" title="Expand window" aria-label="Expand window"><svg class="icon"><use href="#icon-expand"/></svg></button>
+      <div class="compact-node"><span id="compact-node-name"></span><span id="compact-node-detail"></span></div>
+      <button id="compact-copy" type="button" disabled></button>
+      <button id="expand-window" class="icon-button" type="button"><svg class="icon"><use href="#icon-expand"/></svg></button>
     </section>
     <div id="toast" role="status" aria-live="polite" hidden></div>
 
     <script>
       (() => {
         const $ = (id) => document.getElementById(id);
+        const MESSAGES = {
+          en: {
+            brandCaption: 'Connect canvas to your agents',
+            collapseTitle: 'Collapse to mini bar',
+            collapseAria: 'Collapse window',
+            expandTitle: 'Expand window',
+            expandAria: 'Expand window',
+            langTitle: 'Switch language',
+            connecting: 'Connecting to local service…',
+            connected: 'Local MCP service connected',
+            disconnected: 'Local MCP service disconnected',
+            retry: 'Retry',
+            connectingShort: 'Connecting…',
+            selectionSection: 'Current selection',
+            liveLabel: 'Live',
+            readingSelection: 'Reading selection…',
+            copyPrompt: 'Copy node prompt',
+            copyHint: 'Re-reads selection on click',
+            promptPreview: 'Prompt preview',
+            pasteHint: 'Paste straight to an agent',
+            promptPlaceholder: 'Select a layer to see the copyable prompt here.',
+            manualAria: 'Manually copy the node prompt',
+            manualPrefix: 'Auto-copy unavailable; text is selected — press',
+            manualSuffix: 'to copy.',
+            localApi: 'Local Plugin API',
+            noQuota: 'No official quota',
+            collapsedAria: 'Collapsed Figma Local MCP',
+            copy: 'Copy',
+            copyingMain: 'Copying…',
+            copyingCompact: 'Copying',
+            copiedMain: 'Copied — go paste',
+            copiedCompact: 'Copied',
+            layersSelected: '{count} layers selected',
+            noSelection: 'No selection',
+            keepOne: 'Keep only one layer selected',
+            selectCanvas: 'Select a layer on the Figma canvas',
+            compactSelected: '{count} selected',
+            compactNoSelection: 'No selection',
+            selectOneOnly: 'Select one layer only',
+            compactFallback: 'Figma Local MCP',
+            dotConnected: 'Local service connected',
+            dotDisconnected: 'Local service disconnected',
+            toastSelectOneCopy: 'Select only one layer, then copy',
+            toastSelectFirst: 'Select a layer in Figma first',
+            toastReadFail: 'Could not read the latest selection; try again.',
+            toastCopied: 'Prompt for "{name}" copied',
+            toastNoPrompt: 'Cannot build a prompt for this selection; reselect.',
+            toastManualCopy: 'Auto-copy unavailable; copy the selected text manually.',
+            toastSelectionChanged: 'Selection changed; click copy again.',
+            untitledNode: 'Untitled node',
+            nodeFallback: 'node',
+          },
+          zh: {
+            brandCaption: '连接画布与你的 Agent',
+            collapseTitle: '收起为小状态条',
+            collapseAria: '收起窗口',
+            expandTitle: '展开窗口',
+            expandAria: '展开窗口',
+            langTitle: '切换语言',
+            connecting: '正在连接本地服务…',
+            connected: '本地 MCP 服务已连接',
+            disconnected: '本地 MCP 服务未连接',
+            retry: '重试',
+            connectingShort: '连接中…',
+            selectionSection: '当前选中',
+            liveLabel: '实时同步',
+            readingSelection: '正在读取选区…',
+            copyPrompt: '复制节点 Prompt',
+            copyHint: '点击时读取最新选区',
+            promptPreview: 'Prompt 预览',
+            pasteHint: '直接粘贴给 Agent',
+            promptPlaceholder: '选中一个图层后，这里会显示可复制的 Prompt。',
+            manualAria: '手动复制节点 Prompt',
+            manualPrefix: '自动复制不可用，文本已全选，请按',
+            manualSuffix: '复制。',
+            localApi: '本地 Plugin API',
+            noQuota: '不消耗官方额度',
+            collapsedAria: '已收起的 Figma Local MCP',
+            copy: '复制',
+            copyingMain: '正在复制…',
+            copyingCompact: '复制中',
+            copiedMain: '已复制，去粘贴吧',
+            copiedCompact: '已复制',
+            layersSelected: '已选中 {count} 个图层',
+            noSelection: '尚未选中图层',
+            keepOne: '请只保留一个选中的图层',
+            selectCanvas: '请在 Figma 画布中选择一个图层',
+            compactSelected: '已选 {count} 个图层',
+            compactNoSelection: '未选中图层',
+            selectOneOnly: '请只选择一个图层',
+            compactFallback: 'Figma Local MCP',
+            dotConnected: '本地服务已连接',
+            dotDisconnected: '本地服务未连接',
+            toastSelectOneCopy: '请只选中一个图层后再复制',
+            toastSelectFirst: '请先在 Figma 中选中一个图层',
+            toastReadFail: '未能读取最新选区，请重试。',
+            toastCopied: '已复制「{name}」的 Prompt',
+            toastNoPrompt: '当前选区无法生成 Prompt，请重新选择。',
+            toastManualCopy: '自动复制不可用，请手动复制已全选的文本。',
+            toastSelectionChanged: '选区已变化，请重新点击复制。',
+            untitledNode: '未命名节点',
+            nodeFallback: '节点',
+          },
+        };
+
         const state = { ready: false, connected: false, collapsed: false, fileName: '', pageName: '', selectionCount: 0, selectedNode: null, prompt: '' };
         const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+        let localeOverride = null; // 'zh' | 'en' | null, set by the plugin main thread
+        let locale = 'en'; // effective locale, kept in sync with the plugin main thread
         let activeCopyId = 0;
         let copying = false;
         let copyTimeout = null;
         let toastTimeout = null;
         let renderedPrompt = null;
 
-        $('shortcut').textContent = isMac ? '⌘ ⇧ C' : 'Ctrl Shift C';
-        document.querySelectorAll('.manual-shortcut').forEach((element) => { element.textContent = isMac ? '⌘ C' : 'Ctrl C'; });
+        function computeLocale() {
+          if (localeOverride === 'zh' || localeOverride === 'en') return localeOverride;
+          return /^zh/i.test(navigator.language || '') ? 'zh' : 'en';
+        }
+
+        function t(key, params = {}) {
+          let text = MESSAGES[locale][key] ?? MESSAGES.en[key] ?? key;
+          for (const [name, value] of Object.entries(params)) {
+            text = text.split(`{${name}}`).join(String(value));
+          }
+          return text;
+        }
 
         function send(type, extra = {}) {
           parent.postMessage({ pluginMessage: { type, ...extra } }, '*');
@@ -200,6 +319,32 @@
           toastTimeout = setTimeout(() => { $('toast').hidden = true; }, tone === 'error' ? 4500 : 2600);
         }
 
+        function applyStaticTexts() {
+          document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en';
+          $('brand-caption').textContent = t('brandCaption');
+          const collapse = $('collapse-window');
+          collapse.title = t('collapseTitle');
+          collapse.setAttribute('aria-label', t('collapseAria'));
+          const expand = $('expand-window');
+          expand.title = t('expandTitle');
+          expand.setAttribute('aria-label', t('expandAria'));
+          $('language-toggle').title = t('langTitle');
+          $('language-toggle').setAttribute('aria-label', t('langTitle'));
+          $('language-label').textContent = locale === 'zh' ? 'EN' : '中';
+          $('selection-card').setAttribute('aria-label', t('selectionSection'));
+          $('selection-heading').textContent = t('selectionSection');
+          $('live-label').textContent = t('liveLabel');
+          $('copy-hint-text').textContent = t('copyHint');
+          $('prompt-summary').textContent = t('promptPreview');
+          $('paste-hint').textContent = t('pasteHint');
+          $('prompt-preview').textContent = state.prompt || t('promptPlaceholder');
+          $('manual-prompt').setAttribute('aria-label', t('manualAria'));
+          $('manual-prefix').textContent = t('manualPrefix');
+          $('manual-suffix').textContent = t('manualSuffix');
+          $('local-label').textContent = t('noQuota');
+          $('collapsed').setAttribute('aria-label', t('collapsedAria'));
+        }
+
         function clearFeedback() {
           $('copy-prompt').classList.remove('copied');
           renderCopyButtons();
@@ -211,11 +356,11 @@
           $('compact-copy').disabled = disabled;
           $('copy-prompt').setAttribute('aria-busy', String(copying));
           if (copying) {
-            $('copy-prompt').innerHTML = `${icon('copy')}<span>Copying…</span>`;
-            $('compact-copy').innerHTML = `${icon('copy')}<span>Copying</span>`;
+            $('copy-prompt').innerHTML = `${icon('copy')}<span>${t('copyingMain')}</span>`;
+            $('compact-copy').innerHTML = `${icon('copy')}<span>${t('copyingCompact')}</span>`;
           } else {
-            $('copy-prompt').innerHTML = `${icon('copy')}<span>Copy node prompt</span>`;
-            $('compact-copy').innerHTML = `${icon('copy')}<span>Copy</span>`;
+            $('copy-prompt').innerHTML = `${icon('copy')}<span>${t('copyPrompt')}</span>`;
+            $('compact-copy').innerHTML = `${icon('copy')}<span>${t('copy')}</span>`;
           }
         }
 
@@ -227,28 +372,32 @@
 
         function renderSelection() {
           const node = state.selectedNode;
-          $('document-context').textContent = state.ready ? `${state.fileName} / ${state.pageName}` : 'Local Plugin API';
+          $('document-context').textContent = state.ready ? `${state.fileName} / ${state.pageName}` : t('localApi');
           $('document-context').title = $('document-context').textContent;
           $('single-selection').hidden = !node;
           $('empty-selection').hidden = Boolean(node);
           if (node) {
-            $('node-name').textContent = node.name || 'Untitled node';
+            $('node-name').textContent = node.name || t('untitledNode');
             $('node-name').title = node.name;
             $('node-type').textContent = node.type;
             $('node-id').textContent = node.id;
-            $('compact-node-name').textContent = node.name || 'Untitled node';
+            $('compact-node-name').textContent = node.name || t('untitledNode');
             $('compact-node-name').title = node.name;
             $('compact-node-detail').textContent = `${node.type} · ${node.id}`;
           } else {
             const multiple = state.selectionCount > 1;
-            $('empty-title').textContent = state.ready ? (multiple ? `${state.selectionCount} layers selected` : 'No selection') : 'Reading selection…';
-            $('empty-description').textContent = multiple ? 'Keep only one layer selected' : 'Select a layer on the Figma canvas';
-            $('compact-node-name').textContent = state.ready ? (multiple ? `${state.selectionCount} selected` : 'No selection') : 'Reading selection…';
-            $('compact-node-detail').textContent = multiple ? 'Select one layer only' : 'Figma Local MCP';
+            $('empty-title').textContent = state.ready
+              ? (multiple ? t('layersSelected', { count: state.selectionCount }) : t('noSelection'))
+              : t('readingSelection');
+            $('empty-description').textContent = multiple ? t('keepOne') : t('selectCanvas');
+            $('compact-node-name').textContent = state.ready
+              ? (multiple ? t('compactSelected', { count: state.selectionCount }) : t('compactNoSelection'))
+              : t('readingSelection');
+            $('compact-node-detail').textContent = multiple ? t('selectOneOnly') : t('compactFallback');
           }
           if (renderedPrompt !== state.prompt) {
             renderedPrompt = state.prompt;
-            $('prompt-preview').textContent = state.prompt || 'Select a layer to see the copyable prompt here.';
+            $('prompt-preview').textContent = state.prompt || t('promptPlaceholder');
             $('manual-prompt').value = state.prompt;
             hideManualPrompt();
             clearFeedback();
@@ -259,11 +408,13 @@
         function renderConnection() {
           const connectionState = state.connected ? 'connected' : (state.ready ? 'disconnected' : 'connecting');
           $('connection').dataset.state = connectionState;
-          $('connection-label').textContent = state.connected ? 'Local MCP service connected' : (state.ready ? 'Local MCP service disconnected' : 'Connecting to local service…');
+          $('connection-label').textContent = state.connected
+            ? t('connected')
+            : (state.ready ? t('disconnected') : t('connecting'));
           $('retry').hidden = state.connected || !state.ready;
           document.querySelectorAll('[data-connection-dot]').forEach((dot) => {
             dot.dataset.state = connectionState;
-            dot.title = state.connected ? 'Local service connected' : 'Local service disconnected';
+            dot.title = state.connected ? t('dotConnected') : t('dotDisconnected');
           });
         }
 
@@ -284,7 +435,7 @@
         function requestCopy() {
           if (copying) return;
           if (!state.selectedNode) {
-            showToast(state.selectionCount > 1 ? 'Select only one layer, then copy' : 'Select a layer in Figma first', 'error');
+            showToast(state.selectionCount > 1 ? t('toastSelectOneCopy') : t('toastSelectFirst'), 'error');
             return;
           }
           setCopying(true);
@@ -293,7 +444,7 @@
             if (requestId !== activeCopyId) return;
             activeCopyId += 1;
             setCopying(false);
-            showToast('Could not read the latest selection; try again.', 'error');
+            showToast(t('toastReadFail'), 'error');
           }, 5000);
           send('copy-prompt', { requestId });
         }
@@ -322,18 +473,18 @@
         }
 
         function showCopiedFeedback() {
-          const name = state.selectedNode ? state.selectedNode.name || 'Untitled node' : 'node';
+          const name = state.selectedNode ? state.selectedNode.name || t('untitledNode') : t('nodeFallback');
           $('copy-prompt').classList.add('copied');
-          $('copy-prompt').innerHTML = `${icon('check')}<span>Copied — go paste</span>`;
-          $('compact-copy').innerHTML = `${icon('check')}<span>Copied</span>`;
-          showToast(`Prompt for "${name}" copied`);
+          $('copy-prompt').innerHTML = `${icon('check')}<span>${t('copiedMain')}</span>`;
+          $('compact-copy').innerHTML = `${icon('check')}<span>${t('copiedCompact')}</span>`;
+          showToast(t('toastCopied', { name }));
         }
 
         async function receivePrompt(message) {
           if (message.requestId !== activeCopyId) return;
           setCopying(false);
           if (!message.prompt) {
-            showToast('Cannot build a prompt for this selection; reselect.', 'error');
+            showToast(t('toastNoPrompt'), 'error');
             return;
           }
           const copied = await copyText(message.prompt);
@@ -349,10 +500,16 @@
             $('manual-help').hidden = false;
             $('manual-prompt').focus();
             $('manual-prompt').select();
-            showToast('Auto-copy unavailable; copy the selected text manually.', 'error');
+            showToast(t('toastManualCopy'), 'error');
           } else {
-            showToast('Selection changed; click copy again.', 'error');
+            showToast(t('toastSelectionChanged'), 'error');
           }
+        }
+
+        function applyLocale() {
+          applyStaticTexts();
+          renderConnection();
+          renderSelection();
         }
 
         window.onmessage = (event) => {
@@ -376,6 +533,10 @@
           } else if (message.type === 'view') {
             state.collapsed = message.collapsed;
             renderView();
+          } else if (message.type === 'locale') {
+            localeOverride = message.locale === 'zh' || message.locale === 'en' ? message.locale : null;
+            locale = computeLocale();
+            applyLocale();
           } else if (message.type === 'prompt') {
             void receivePrompt(message);
           } else if (message.type === 'prompt-error' && message.requestId === activeCopyId) {
@@ -388,13 +549,19 @@
 
         $('copy-prompt').addEventListener('click', requestCopy);
         $('compact-copy').addEventListener('click', requestCopy);
+        $('language-toggle').addEventListener('click', () => {
+          locale = locale === 'zh' ? 'en' : 'zh';
+          localeOverride = locale;
+          send('set-locale', { locale, persist: true });
+          applyLocale();
+        });
         $('retry').addEventListener('click', () => {
           $('retry').disabled = true;
-          $('retry').textContent = 'Connecting…';
+          $('retry').textContent = t('connectingShort');
           send('retry');
           setTimeout(() => {
             $('retry').disabled = false;
-            $('retry').textContent = 'Retry';
+            $('retry').textContent = t('retry');
           }, 1200);
         });
         $('collapse-window').addEventListener('click', () => send('set-view', { collapsed: true }));
@@ -406,7 +573,14 @@
             requestCopy();
           }
         });
+
+        $('shortcut').textContent = isMac ? '⌘ ⇧ C' : 'Ctrl Shift C';
+        document.querySelectorAll('.manual-shortcut').forEach((element) => { element.textContent = isMac ? '⌘ C' : 'Ctrl C'; });
+        locale = computeLocale();
+        applyLocale();
+        renderView();
         send('ready');
+        send('set-locale', { locale, persist: false });
       })();
     </script>
   </body>

@@ -58,6 +58,7 @@ describe('readDocumentStatus', () => {
       selectionCount: 1,
       selectedNode: { id: '9:9', name: '首页', type: 'FRAME' },
       pluginVersion: PLUGIN_VERSION,
+      locale: 'en',
     });
   });
 
@@ -95,14 +96,14 @@ describe('resolveSceneNode', () => {
 
 describe('executeCommand', () => {
   it('get_selection returns document status and selection summaries', async () => {
-    const result = await executeCommand(makeCtx({ selection: [makeNode({ id: '5:5' })] }), PLUGIN_VERSION, command('get_selection')) as Record<string, any>;
+    const result = await executeCommand(makeCtx({ selection: [makeNode({ id: '5:5' })] }), PLUGIN_VERSION, 'en', command('get_selection')) as Record<string, any>;
     expect(result.document).toMatchObject({ fileName: '测试文件', selectionCount: 1 });
     expect(result.selection).toHaveLength(1);
     expect(result.selection[0]).toMatchObject({ id: '5:5', type: 'FRAME' });
   });
 
   it('get_design_context uses context document info and default options', async () => {
-    const result = await executeCommand(makeCtx(), PLUGIN_VERSION, command('get_design_context')) as Record<string, any>;
+    const result = await executeCommand(makeCtx(), PLUGIN_VERSION, 'en', command('get_design_context')) as Record<string, any>;
     expect(result.document).toEqual({ fileName: '测试文件', pageId: '0:1', pageName: 'Page 1' });
     expect(result.maxDepth).toBe(6);
     expect(result.maxNodes).toBe(300);
@@ -114,7 +115,7 @@ describe('executeCommand', () => {
       selection: [],
       nodes: { '7:7': makeNode({ id: '7:7', children: [makeNode({ id: '7:8' })] }) },
     });
-    const result = await executeCommand(ctx, PLUGIN_VERSION, command('get_design_context', { nodeId: '7:7', maxDepth: 0 })) as Record<string, any>;
+    const result = await executeCommand(ctx, PLUGIN_VERSION, 'en', command('get_design_context', { nodeId: '7:7', maxDepth: 0 })) as Record<string, any>;
     expect(result.root).toMatchObject({ id: '7:7' });
     expect(result.root.childrenTruncated).toBe('maxDepth');
     expect(result.maxDepth).toBe(0);
@@ -144,6 +145,7 @@ describe('executeCommand', () => {
     const result = await executeCommand(
       makeCtx({ variables, collections }),
       PLUGIN_VERSION,
+      'en',
       command('get_variable_defs', { maxVariables: 3 }),
     ) as Record<string, any>;
 
@@ -156,7 +158,7 @@ describe('executeCommand', () => {
   });
 
   it('get_variable_defs defaults to 200 max and returns zero for empty sets', async () => {
-    const result = await executeCommand(makeCtx({ variables: [], collections: [] }), PLUGIN_VERSION, command('get_variable_defs')) as Record<string, any>;
+    const result = await executeCommand(makeCtx({ variables: [], collections: [] }), PLUGIN_VERSION, 'en', command('get_variable_defs')) as Record<string, any>;
     expect(result.variables).toEqual([]);
     expect(result.collections).toEqual([]);
     expect(result.totalVariables).toBe(0);
@@ -167,6 +169,7 @@ describe('executeCommand', () => {
     const result = await executeCommand(
       makeCtx({ selection: [makeNode({ id: '8:8', name: '图标', exportAsync: async () => new Uint8Array([1, 2, 3]) })] }),
       PLUGIN_VERSION,
+      'en',
       command('export_node', { format: 'PNG' }),
     ) as Record<string, unknown>;
     expect(result).toMatchObject({
@@ -192,6 +195,7 @@ describe('executeCommand', () => {
     const result = await executeCommand(
       makeCtx({ selection: [node] }),
       PLUGIN_VERSION,
+      'en',
       command('export_node', { format: 'SVG', maxDimension: 400 }),
     ) as Record<string, unknown>;
     expect(calls[0]).toEqual({ format: 'SVG', constraint: { type: 'SCALE', value: 0.5 } });
@@ -202,11 +206,11 @@ describe('executeCommand', () => {
   it('export_node errors above 12 MiB', async () => {
     const big = makeNode({ exportAsync: async () => new Uint8Array(12 * 1024 * 1024 + 1) });
     await expect(
-      executeCommand(makeCtx({ selection: [big] }), PLUGIN_VERSION, command('export_node', {})),
+      executeCommand(makeCtx({ selection: [big] }), PLUGIN_VERSION, 'en', command('export_node', {})),
     ).rejects.toThrow(/exceeding.*limit/);
   });
 
   it('errors on unknown commands', async () => {
-    await expect(executeCommand(makeCtx(), PLUGIN_VERSION, command('run_js'))).rejects.toThrow(/Unsupported command: run_js/);
+    await expect(executeCommand(makeCtx(), PLUGIN_VERSION, 'en', command('run_js'))).rejects.toThrow(/Unsupported command: run_js/);
   });
 });

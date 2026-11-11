@@ -17,6 +17,14 @@ describe('createNodePrompt', () => {
     expect(prompt).toContain('"添加 文件夹 后"');
   });
 
+  it('generates the Chinese template for the zh locale', () => {
+    const prompt = createNodePrompt({ id: '1830:2591', name: '首页' }, 'zh');
+    expect(prompt).toContain('「首页」');
+    expect(prompt).toContain('nodeId: 1830:2591');
+    expect(prompt).toContain('只读');
+    expect(createNodePrompt({ id: '1:1', name: '   ' }, 'zh')).toContain('「未命名节点」');
+  });
+
   it('falls back to Untitled node for empty names', () => {
     const prompt = createNodePrompt({ id: '1:1', name: '   ' });
     expect(prompt).toContain('"Untitled node"');

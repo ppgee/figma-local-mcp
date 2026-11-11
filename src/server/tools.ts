@@ -5,11 +5,15 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { bridgeOrigin, exportDirectory } from './config.js';
+import { messages } from '../shared/messages.js';
+import type { Locale } from '../shared/messages.js';
 import type { BridgeStatus, ExportPayload, PluginCommandName } from '../shared/protocol.js';
 
 export interface BridgeLike {
   getStatus(): Promise<BridgeStatus>;
   call(name: PluginCommandName, args: Record<string, unknown>, timeoutMs?: number): Promise<unknown>;
+  /** Locale reported by the plugin; drives localized runtime messages. */
+  getLocale?(): Locale | null;
 }
 
 const nodeIdSchema = z.string().min(1).optional();
@@ -31,12 +35,13 @@ async function handleTool(action: () => Promise<CallToolResult>): Promise<CallTo
   }
 }
 
-export function validateExport(value: unknown): ExportPayload {
+export function validateExport(value: unknown, locale: Locale = 'en'): ExportPayload {
+  const m = messages(locale);
   const payload = value as ExportPayload;
   if (!payload || typeof payload.data !== 'string' || typeof payload.byteLength !== 'number') {
-    throw new Error('The plugin returned an invalid export result.');
+    throw new Error(m.invalidExport);
   }
-  if (payload.byteLength > 12 * 1024 * 1024) throw new Error('Export result exceeds the size limit.');
+  if (payload.byteLength > 12 * 1024 * 1024) throw new Error(m.exportSizeLimit);
   return payload;
 }
 
@@ -54,9 +59,9 @@ function clampNameBytes(name: string, maxBytes: number): string {
   return out;
 }
 
-export async function saveExport(payload: ExportPayload, directory: string = exportDirectory): Promise<string> {
+export async function saveExport(payload: ExportPayload, directory: string = exportDirectory, locale: Locale = 'en'): Promise<string> {
   const data = Buffer.from(payload.data, 'base64');
-  if (data.length !== payload.byteLength) throw new Error('Export result failed the length check.');
+  if (data.length !== payload.byteLength) throw new Error(messages(locale).exportLengthCheck);
   await mkdir(directory, { recursive: true });
   const extension = payload.format.toLowerCase();
   const safeName = clampNameBytes(
@@ -70,6 +75,7 @@ export async function saveExport(payload: ExportPayload, directory: string = exp
 }
 
 export function registerTools(server: McpServer, bridge: BridgeLike): void {
+  const locale = (): Locale => bridge.getLocale?.() ?? 'en';
   server.registerTool(
     'get_plugin_status',
     {
@@ -128,8 +134,9 @@ export function registerTools(server: McpServer, bridge: BridgeLike): void {
       },
     },
     (args) => handleTool(async () => {
-      const payload = validateExport(await bridge.call('export_node', args, 120_000));
-      const path = await saveExport(payload);
+      const currentLocale = locale();
+      const payload = validateExport(await bridge.call('export_node', args, 120_000), currentLocale);
+      const path = await saveExport(payload, exportDirectory, currentLocale);
       return textResult({
         path,
         nodeId: payload.nodeId,
@@ -157,9 +164,9 @@ export function registerTools(server: McpServer, bridge: BridgeLike): void {
         format: 'PNG',
         scale: 1,
         maxDimension: args.maxDimension,
-      }, 120_000));
+      }, 120_000), locale());
       if (payload.byteLength > 8 * 1024 * 1024) {
-        throw new Error('Screenshot exceeds 8 MiB; lower maxDimension, or use export_node to save a file instead.');
+        throw new Error(messages(locale()).screenshotTooLarge);
       }
       return {
         content: [

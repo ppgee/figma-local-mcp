@@ -3,6 +3,7 @@ import type {
   PluginCommand,
   PluginDocumentStatus,
 } from '../shared/protocol';
+import { messages, type Locale } from '../shared/messages';
 import { cloneValue, createDesignContext, summarizeNode } from './serialize';
 import { base64Encode, computeExportScale } from './export';
 
@@ -26,7 +27,7 @@ export interface FigmaContext {
   };
 }
 
-export function readDocumentStatus(ctx: FigmaContext, pluginVersion: string): PluginDocumentStatus {
+export function readDocumentStatus(ctx: FigmaContext, pluginVersion: string, locale: Locale = 'en'): PluginDocumentStatus {
   const selection = ctx.currentPage.selection;
   const selectedNode = selection.length === 1 ? selection[0] : null;
   return {
@@ -40,18 +41,20 @@ export function readDocumentStatus(ctx: FigmaContext, pluginVersion: string): Pl
       type: selectedNode.type,
     } : null,
     pluginVersion,
+    locale,
   };
 }
 
-export async function resolveSceneNode(ctx: FigmaContext, nodeId?: string): Promise<SceneNode> {
+export async function resolveSceneNode(ctx: FigmaContext, nodeId?: string, locale: Locale = 'en'): Promise<SceneNode> {
+  const m = messages(locale);
   const selection = ctx.currentPage.selection;
   if (!nodeId && selection.length !== 1) {
-    throw new Error(selection.length === 0 ? 'Select a Frame or layer in Figma first.' : 'Select only one Frame or layer.');
+    throw new Error(selection.length === 0 ? m.selectFrameFirst : m.selectOnlyOne);
   }
   const node = nodeId ? await ctx.getNodeByIdAsync(nodeId) : selection[0];
-  if (!node) throw new Error(`Node ${nodeId} not found.`);
+  if (!node) throw new Error(m.nodeNotFound(String(nodeId)));
   if (node.type === 'DOCUMENT' || node.type === 'PAGE') {
-    throw new Error('Provide the node ID of a Frame or canvas layer, not a page or document.');
+    throw new Error(m.notCanvasNode);
   }
   return node as SceneNode;
 }
@@ -88,8 +91,8 @@ async function getVariableDefs(ctx: FigmaContext, maxVariables: number): Promise
   };
 }
 
-export async function exportNode(ctx: FigmaContext, args: Record<string, unknown>): Promise<ExportPayload> {
-  const node = await resolveSceneNode(ctx, typeof args.nodeId === 'string' ? args.nodeId : undefined);
+export async function exportNode(ctx: FigmaContext, args: Record<string, unknown>, locale: Locale = 'en'): Promise<ExportPayload> {
+  const node = await resolveSceneNode(ctx, typeof args.nodeId === 'string' ? args.nodeId : undefined, locale);
   const format = (typeof args.format === 'string' ? args.format : 'PNG') as ExportPayload['format'];
   const scale = computeExportScale(
     node.absoluteBoundingBox,
@@ -98,7 +101,7 @@ export async function exportNode(ctx: FigmaContext, args: Record<string, unknown
   );
   const bytes = await node.exportAsync({ format, constraint: { type: 'SCALE', value: scale } });
   if (bytes.length > MAX_EXPORT_BYTES) {
-    throw new Error(`Export result is ${bytes.length} bytes, exceeding the ${MAX_EXPORT_BYTES}-byte limit; shrink the node or lower the export scale.`);
+    throw new Error(messages(locale).exportTooLarge(bytes.length, MAX_EXPORT_BYTES));
   }
   const mimeType = {
     PNG: 'image/png',
@@ -120,17 +123,19 @@ export async function exportNode(ctx: FigmaContext, args: Record<string, unknown
 export async function executeCommand(
   ctx: FigmaContext,
   pluginVersion: string,
+  locale: Locale,
   command: PluginCommand,
 ): Promise<unknown> {
+  const m = messages(locale);
   const { args } = command;
   switch (command.name) {
     case 'get_selection':
       return {
-        document: readDocumentStatus(ctx, pluginVersion),
+        document: readDocumentStatus(ctx, pluginVersion, locale),
         selection: ctx.currentPage.selection.map(summarizeNode),
       };
     case 'get_design_context': {
-      const node = await resolveSceneNode(ctx, typeof args.nodeId === 'string' ? args.nodeId : undefined);
+      const node = await resolveSceneNode(ctx, typeof args.nodeId === 'string' ? args.nodeId : undefined, locale);
       return createDesignContext(node, {
         maxDepth: typeof args.maxDepth === 'number' ? args.maxDepth : 6,
         maxNodes: typeof args.maxNodes === 'number' ? args.maxNodes : 300,
@@ -143,8 +148,8 @@ export async function executeCommand(
     case 'get_variable_defs':
       return getVariableDefs(ctx, typeof args.maxVariables === 'number' ? args.maxVariables : 200);
     case 'export_node':
-      return exportNode(ctx, args);
+      return exportNode(ctx, args, locale);
     default:
-      throw new Error(`Unsupported command: ${String(command.name)}`);
+      throw new Error(m.unsupportedCommand(String(command.name)));
   }
 }

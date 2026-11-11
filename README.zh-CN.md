@@ -68,6 +68,8 @@ claude mcp add --scope user figma-local -- figma-local-mcp
 
 插件会实时显示当前选区。未选中图层或选中多个图层时，复制按钮不可用。
 
+界面语言默认跟随系统（`zh*` 为中文，否则英文），可通过插件头部的按钮切换并记忆；复制的 Prompt 模板与运行时提示也跟随该语言。
+
 MCP 提供以下工具：
 
 - `get_plugin_status`：检查插件连接及当前选区。

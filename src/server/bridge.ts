@@ -1,6 +1,8 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { localConfig } from './config.js';
+import { messages } from '../shared/messages.js';
+import type { Locale } from '../shared/messages.js';
 import type {
   BridgeStatus,
   PluginCommand,
@@ -37,7 +39,7 @@ function sendJson(response: ServerResponse, status: number, value: unknown): voi
   response.end(JSON.stringify(value));
 }
 
-async function readJson(request: IncomingMessage): Promise<Record<string, unknown>> {
+async function readJson(request: IncomingMessage, tooLargeMessage: string): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
   let size = 0;
   let tooLarge = false;
@@ -53,7 +55,7 @@ async function readJson(request: IncomingMessage): Promise<Record<string, unknow
   }
 
   if (tooLarge) {
-    throw Object.assign(new Error('Request body too large.'), { statusCode: 413 });
+    throw Object.assign(new Error(tooLargeMessage), { statusCode: 413 });
   }
   if (chunks.length === 0) return {};
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
@@ -71,6 +73,7 @@ export class PluginBridge {
   private readonly active = new Set<string>();
   private readonly options: BridgeOptions;
   private documentStatus: PluginDocumentStatus | null = null;
+  private pluginLocale: Locale | null = null;
   private lastSeen: number | null = null;
   private remoteFallback = false;
 
@@ -79,6 +82,10 @@ export class PluginBridge {
     this.server = createServer((request, response) => {
       void this.handleRequest(request, response);
     });
+  }
+
+  private m() {
+    return messages(this.pluginLocale ?? 'en');
   }
 
   private get port(): number {
@@ -125,7 +132,7 @@ export class PluginBridge {
     if (this.remoteFallback) return;
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
-      pending.reject(new Error('Local MCP service is shutting down.'));
+      pending.reject(new Error(this.m().shuttingDown));
     }
     this.pending.clear();
     this.queue.length = 0;
@@ -148,7 +155,7 @@ export class PluginBridge {
       return payload.result;
     }
     if (!this.isConnected()) {
-      throw new Error('Figma plugin not connected. Run the Figma Local MCP Bridge plugin (the window can be collapsed) and make sure the local service is running.');
+      throw new Error(this.m().pluginNotConnected);
     }
 
     const id = randomUUID();
@@ -158,7 +165,7 @@ export class PluginBridge {
         this.active.delete(id);
         const index = this.queue.indexOf(id);
         if (index >= 0) this.queue.splice(index, 1);
-        reject(new Error(`Plugin command ${name} timed out.`));
+        reject(new Error(this.m().commandTimeout(name)));
       }, timeoutMs);
       this.pending.set(id, { name, args, resolve, reject, timer });
       this.queue.push(id);
@@ -181,7 +188,7 @@ export class PluginBridge {
       signal: AbortSignal.timeout(timeoutMs),
     });
     const payload = await response.json() as Record<string, unknown> & { error?: string };
-    if (!response.ok) throw new Error(payload.error || `Existing bridge returned ${response.status}`);
+    if (!response.ok) throw new Error(payload.error || this.m().existingBridge(response.status));
     return payload;
   }
 
@@ -194,6 +201,7 @@ export class PluginBridge {
       selectionCount: this.documentStatus?.selectionCount ?? 0,
       selectedNode: this.documentStatus?.selectedNode ?? null,
       pluginVersion: this.documentStatus?.pluginVersion ?? '',
+      locale: this.documentStatus?.locale ?? 'en',
       lastSeen: this.lastSeen === null ? null : new Date(this.lastSeen).toISOString(),
       queuedCommands: this.queue.length,
       activeCommands: this.active.size,
@@ -203,7 +211,7 @@ export class PluginBridge {
   private async getRemoteStatus(): Promise<BridgeStatus> {
     const payload = await this.requestBridge('GET', '/health');
     if (payload.ok !== true || payload.bridge !== this.origin || !payload.status) {
-      throw new Error(`Port ${this.port} is occupied by another service.`);
+      throw new Error(this.m().portOccupied(this.port));
     }
     return payload.status as BridgeStatus;
   }
@@ -228,7 +236,7 @@ export class PluginBridge {
       const authorization = request.headers.authorization ?? '';
       const supplied = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
       if (!tokensMatch(this.token, supplied)) {
-        sendJson(response, 401, { error: 'Unauthorized' });
+        sendJson(response, 401, { error: this.m().unauthorized });
         return;
       }
 
@@ -238,9 +246,9 @@ export class PluginBridge {
         return;
       }
       if (request.method === 'POST' && path === '/v1/plugin/call') {
-        const body = await readJson(request);
+        const body = await readJson(request, this.m().requestTooLarge);
         if (!commandNames.includes(body.name as PluginCommandName)) {
-          sendJson(response, 400, { error: 'Unknown plugin command' });
+          sendJson(response, 400, { error: this.m().unknownPluginCommand });
           return;
         }
         const requestedTimeout = typeof body.timeoutMs === 'number' ? body.timeoutMs : 60_000;
@@ -254,24 +262,24 @@ export class PluginBridge {
         return;
       }
       if (request.method === 'POST' && path === '/v1/plugin/poll') {
-        const body = await readJson(request);
+        const body = await readJson(request, this.m().requestTooLarge);
         this.updateDocumentStatus(body);
         const command = this.nextCommand();
         sendJson(response, 200, { command });
         return;
       }
       if (request.method === 'POST' && path === '/v1/plugin/result') {
-        const body = await readJson(request);
+        const body = await readJson(request, this.m().requestTooLarge);
         this.acceptResult(body as unknown as PluginResult);
         sendJson(response, 200, { ok: true });
         return;
       }
-      sendJson(response, 404, { error: 'Unknown endpoint' });
+      sendJson(response, 404, { error: this.m().unknownEndpoint });
     } catch (error) {
       const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
         ? Number(error.statusCode)
         : 400;
-      const message = error instanceof Error ? error.message : 'Request failed';
+      const message = error instanceof Error ? error.message : this.m().requestFailed;
       if (!response.headersSent) sendJson(response, statusCode, { error: message.slice(0, 500) });
     }
   }
@@ -298,7 +306,9 @@ export class PluginBridge {
         }
         : null,
       pluginVersion: typeof body.pluginVersion === 'string' ? body.pluginVersion.slice(0, 50) : '',
+      locale: body.locale === 'zh' || body.locale === 'en' ? body.locale : (this.documentStatus?.locale ?? 'en'),
     };
+    if (body.locale === 'zh' || body.locale === 'en') this.pluginLocale = body.locale;
     this.lastSeen = Date.now();
   }
 
@@ -315,14 +325,14 @@ export class PluginBridge {
   private acceptResult(result: PluginResult): void {
     const pending = this.pending.get(result.id);
     if (!pending || !this.active.delete(result.id)) {
-      throw Object.assign(new Error('Unknown or expired command result.'), { statusCode: 404 });
+      throw Object.assign(new Error(this.m().unknownResult), { statusCode: 404 });
     }
     clearTimeout(pending.timer);
     this.pending.delete(result.id);
     if (result.ok) {
       pending.resolve(result.result);
     } else {
-      pending.reject(new Error((result.error || 'Plugin execution failed.').slice(0, 2000)));
+      pending.reject(new Error((result.error || this.m().pluginExecutionFailed).slice(0, 2000)));
     }
   }
 }

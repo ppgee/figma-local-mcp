@@ -1,3 +1,5 @@
+import type { Locale } from './messages';
+
 export type PluginCommandName =
   | 'get_selection'
   | 'get_design_context'
@@ -30,6 +32,7 @@ export interface PluginDocumentStatus {
   selectionCount: number;
   selectedNode: PluginSelectedNode | null;
   pluginVersion: string;
+  locale: Locale;
 }
 
 export interface BridgeStatus extends PluginDocumentStatus {

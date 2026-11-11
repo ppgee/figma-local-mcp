@@ -68,6 +68,8 @@ Each client starts its own MCP process and reuses the same local bridge. Do not 
 
 The plugin shows the current selection live. With no selection or multiple layers selected, copy is disabled.
 
+The UI language follows your system locale (Chinese for `zh*`, English otherwise) and can be switched with the toggle in the plugin header; the choice is remembered. The copied prompt template and runtime messages follow the same language.
+
 MCP tools:
 
 - `get_plugin_status`: check plugin connection and current selection.

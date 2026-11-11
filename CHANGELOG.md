@@ -2,6 +2,16 @@
 
 Notable changes to this project. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows SemVer. On release, `release.yml` extracts the matching section as the GitHub Release body.
 
+## [0.4.0] - 2026-11-11
+
+### Added
+
+- Full internationalization: the plugin UI language follows the system locale (`zh*` → Chinese, otherwise English) with a manual language toggle in the plugin header; the choice persists across sessions.
+- A shared bilingual message catalog (`src/shared/messages.ts`) as the single source for runtime strings; the Chinese table is type-checked against the English one.
+- Runtime errors now follow the plugin's language, including plugin command errors, bridge errors and MCP tool errors (the server learns the locale from the plugin's poll reports; English applies until the plugin connects).
+- The copied node prompt template follows the selected language.
+- `resolveLocale` helper (`src/plugin/i18n.ts`) with unit tests.
+
 ## [0.3.0] - 2026-11-11
 
 ### Changed

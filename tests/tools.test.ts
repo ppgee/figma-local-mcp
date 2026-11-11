@@ -34,6 +34,11 @@ class FakeBridge {
   };
   result: unknown = {};
   error: Error | null = null;
+  locale: 'zh' | 'en' | null = null;
+
+  getLocale(): 'zh' | 'en' | null {
+    return this.locale;
+  }
 
   async getStatus(): Promise<BridgeStatus> {
     return this.status;
@@ -205,6 +210,16 @@ describe('export_node and get_screenshot', () => {
     expect(Buffer.byteLength(name, 'utf8')).toBeLessThanOrEqual(120);
     expect(Buffer.byteLength(basename(result.path), 'utf8')).toBeLessThanOrEqual(255);
     expect(name.length).toBe(40);
+  });
+
+  it('localizes tool errors using the locale reported by the plugin', async () => {
+    const bridge = new FakeBridge();
+    bridge.locale = 'zh';
+    bridge.result = { nope: true };
+    await connect(bridge);
+    const result = (await client.callTool({ name: 'export_node', arguments: {} })) as ToolText;
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('无效的导出结果');
   });
 
   it('errors on invalid payloads, length mismatches and oversized results', async () => {
