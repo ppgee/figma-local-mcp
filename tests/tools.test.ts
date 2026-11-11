@@ -194,7 +194,7 @@ describe('export_node 与 get_screenshot', () => {
     expect(bridge.calls[0].timeoutMs).toBe(120_000);
   });
 
-  it('超长节点名截断到 80 字符', async () => {
+  it('超长节点名按字节钳制，总文件名不超过 255 字节', async () => {
     const bridge = new FakeBridge();
     bridge.result = payload({ nodeName: '名'.repeat(120) });
     await connect(bridge);
@@ -202,7 +202,9 @@ describe('export_node 与 get_screenshot', () => {
       await client.callTool({ name: 'export_node', arguments: {} }),
     );
     const name = basename(result.path).replace(/^[0-9]+-[0-9a-f]+-1-23-/, '').replace(/\.png$/, '');
-    expect(name.length).toBe(80);
+    expect(Buffer.byteLength(name, 'utf8')).toBeLessThanOrEqual(120);
+    expect(Buffer.byteLength(basename(result.path), 'utf8')).toBeLessThanOrEqual(255);
+    expect(name.length).toBe(40);
   });
 
   it('无效导出结果、长度不符与超限时返回错误', async () => {

@@ -40,15 +40,29 @@ export function validateExport(value: unknown): ExportPayload {
   return payload;
 }
 
+/**
+ * 把名称钳制到给定的 UTF-8 字节数内（按码点边界截断），避免中文等多字节名称
+ * 触发 Linux/macOS 文件名长度上限（ENAMETOOLONG）。
+ */
+function clampNameBytes(name: string, maxBytes: number): string {
+  if (Buffer.byteLength(name, 'utf8') <= maxBytes) return name;
+  let out = '';
+  for (const character of name) {
+    if (Buffer.byteLength(out + character, 'utf8') > maxBytes) break;
+    out += character;
+  }
+  return out;
+}
+
 export async function saveExport(payload: ExportPayload, directory: string = exportDirectory): Promise<string> {
   const data = Buffer.from(payload.data, 'base64');
   if (data.length !== payload.byteLength) throw new Error('导出结果的长度校验失败。');
   await mkdir(directory, { recursive: true });
   const extension = payload.format.toLowerCase();
-  const safeName = payload.nodeName
-    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
-    .trim()
-    .slice(0, 80) || 'figma-node';
+  const safeName = clampNameBytes(
+    payload.nodeName.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').trim().slice(0, 80),
+    120,
+  ) || 'figma-node';
   const safeId = payload.nodeId.replace(/[^a-zA-Z0-9_-]/g, '-');
   const path = join(directory, `${Date.now()}-${randomUUID().slice(0, 8)}-${safeId}-${safeName}.${extension}`);
   await writeFile(path, data, { flag: 'wx' });
