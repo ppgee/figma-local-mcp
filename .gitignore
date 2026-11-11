@@ -7,3 +7,4 @@ exports/
 .figma-local-mcp.json
 *.log
 .DS_Store
+coverage/

@@ -55,7 +55,7 @@ await Promise.all([
     define: {
       __BRIDGE_ORIGIN__: JSON.stringify(bridgeOrigin),
       __BRIDGE_TOKEN__: JSON.stringify(config.token),
-      __PLUGIN_VERSION__: JSON.stringify('0.1.0'),
+      __PLUGIN_VERSION__: JSON.stringify('0.2.0'),
     },
   }),
 ]);

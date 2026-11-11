@@ -1,0 +1,212 @@
+import { describe, expect, it } from 'vitest';
+import {
+  executeCommand,
+  readDocumentStatus,
+  resolveSceneNode,
+  type FigmaContext,
+} from '../src/plugin/commands';
+import type { PluginCommand } from '../src/shared/protocol';
+
+const PLUGIN_VERSION = 'test-1.0.0';
+
+function makeNode(overrides: Record<string, unknown> = {}): any {
+  return {
+    id: '1:1',
+    name: '首页',
+    type: 'FRAME',
+    visible: true,
+    absoluteBoundingBox: { x: 0, y: 0, width: 800, height: 600 },
+    exportAsync: async () => new Uint8Array([1, 2, 3]),
+    ...overrides,
+  };
+}
+
+interface CtxOptions {
+  selection?: any[];
+  nodes?: Record<string, any>;
+  variables?: any[];
+  collections?: any[];
+}
+
+function makeCtx(options: CtxOptions = {}): FigmaContext {
+  return {
+    root: { name: '测试文件' },
+    getNodeByIdAsync: async (id: string) => options.nodes?.[id] ?? null,
+    currentPage: {
+      id: '0:1',
+      name: 'Page 1',
+      selection: options.selection ?? [makeNode()],
+    },
+    variables: {
+      getLocalVariablesAsync: async () => options.variables ?? [],
+      getLocalVariableCollectionsAsync: async () => options.collections ?? [],
+    },
+  } as unknown as FigmaContext;
+}
+
+function command(name: string, args: Record<string, unknown> = {}): PluginCommand {
+  return { id: 'cmd-1', name: name as PluginCommand['name'], args };
+}
+
+describe('readDocumentStatus', () => {
+  it('单选时返回选中节点并带插件版本', () => {
+    const status = readDocumentStatus(makeCtx({ selection: [makeNode({ id: '9:9', name: '首页' })] }), PLUGIN_VERSION);
+    expect(status).toEqual({
+      fileName: '测试文件',
+      pageId: '0:1',
+      pageName: 'Page 1',
+      selectionCount: 1,
+      selectedNode: { id: '9:9', name: '首页', type: 'FRAME' },
+      pluginVersion: PLUGIN_VERSION,
+    });
+  });
+
+  it('空选与多选时 selectedNode 为空但保留数量', () => {
+    expect(readDocumentStatus(makeCtx({ selection: [] }), PLUGIN_VERSION).selectedNode).toBeNull();
+    const multi = readDocumentStatus(makeCtx({ selection: [makeNode(), makeNode()] }), PLUGIN_VERSION);
+    expect(multi.selectedNode).toBeNull();
+    expect(multi.selectionCount).toBe(2);
+  });
+});
+
+describe('resolveSceneNode', () => {
+  it('未指定 nodeId 时空选与多选分别报错', async () => {
+    await expect(resolveSceneNode(makeCtx({ selection: [] }))).rejects.toThrow(/请先在 Figma 中选中/);
+    await expect(resolveSceneNode(makeCtx({ selection: [makeNode(), makeNode()] }))).rejects.toThrow(/请只选中一个/);
+  });
+
+  it('未指定 nodeId 时使用当前唯一选区', async () => {
+    const node = await resolveSceneNode(makeCtx({ selection: [makeNode({ id: '2:2' })] }));
+    expect(node.id).toBe('2:2');
+  });
+
+  it('指定 nodeId 时按 ID 解析，不依赖选区', async () => {
+    const ctx = makeCtx({ selection: [], nodes: { '3:3': makeNode({ id: '3:3' }) } });
+    const node = await resolveSceneNode(ctx, '3:3');
+    expect(node.id).toBe('3:3');
+  });
+
+  it('找不到节点或命中页面/文档时报错', async () => {
+    await expect(resolveSceneNode(makeCtx({ nodes: {} }), '4:4')).rejects.toThrow(/找不到节点 4:4/);
+    const pageCtx = makeCtx({ nodes: { '0:2': { id: '0:2', type: 'PAGE', name: 'Page 2' } } });
+    await expect(resolveSceneNode(pageCtx, '0:2')).rejects.toThrow(/请提供 Frame 或其他画布图层/);
+  });
+});
+
+describe('executeCommand', () => {
+  it('get_selection 返回文档状态与选区摘要', async () => {
+    const result = await executeCommand(makeCtx({ selection: [makeNode({ id: '5:5' })] }), PLUGIN_VERSION, command('get_selection')) as Record<string, any>;
+    expect(result.document).toMatchObject({ fileName: '测试文件', selectionCount: 1 });
+    expect(result.selection).toHaveLength(1);
+    expect(result.selection[0]).toMatchObject({ id: '5:5', type: 'FRAME' });
+  });
+
+  it('get_design_context 使用上下文文档信息与默认参数', async () => {
+    const result = await executeCommand(makeCtx(), PLUGIN_VERSION, command('get_design_context')) as Record<string, any>;
+    expect(result.document).toEqual({ fileName: '测试文件', pageId: '0:1', pageName: 'Page 1' });
+    expect(result.maxDepth).toBe(6);
+    expect(result.maxNodes).toBe(300);
+    expect(result.root).toMatchObject({ id: '1:1' });
+  });
+
+  it('get_design_context 支持 nodeId 与自定义深度', async () => {
+    const ctx = makeCtx({
+      selection: [],
+      nodes: { '7:7': makeNode({ id: '7:7', children: [makeNode({ id: '7:8' })] }) },
+    });
+    const result = await executeCommand(ctx, PLUGIN_VERSION, command('get_design_context', { nodeId: '7:7', maxDepth: 0 })) as Record<string, any>;
+    expect(result.root).toMatchObject({ id: '7:7' });
+    expect(result.root.childrenTruncated).toBe('maxDepth');
+    expect(result.maxDepth).toBe(0);
+  });
+
+  it('get_variable_defs 映射集合与变量并支持截断', async () => {
+    const variables = Array.from({ length: 5 }, (_, index) => ({
+      id: `v${index}`,
+      name: `变量${index}`,
+      key: `key${index}`,
+      variableCollectionId: 'c1',
+      resolvedType: 'COLOR',
+      valuesByMode: { m1: { r: index, g: 0, b: 0, a: 1 } },
+      description: '',
+      scopes: ['ALL_SCOPES'],
+      hiddenFromPublishing: false,
+      remote: false,
+    }));
+    const collections = [{
+      id: 'c1',
+      name: '集合',
+      defaultModeId: 'm1',
+      modes: [{ modeId: 'm1', name: '默认' }],
+      variableIds: variables.map((v) => v.id),
+      remote: false,
+    }];
+    const result = await executeCommand(
+      makeCtx({ variables, collections }),
+      PLUGIN_VERSION,
+      command('get_variable_defs', { maxVariables: 3 }),
+    ) as Record<string, any>;
+
+    expect(result.collections).toHaveLength(1);
+    expect(result.collections[0]).toMatchObject({ id: 'c1', name: '集合', defaultModeId: 'm1' });
+    expect(result.variables).toHaveLength(3);
+    expect(result.totalVariables).toBe(5);
+    expect(result.returnedVariables).toBe(3);
+    expect(result.truncated).toBe(true);
+  });
+
+  it('get_variable_defs 默认上限 200 且空集合返回零', async () => {
+    const result = await executeCommand(makeCtx({ variables: [], collections: [] }), PLUGIN_VERSION, command('get_variable_defs')) as Record<string, any>;
+    expect(result.variables).toEqual([]);
+    expect(result.collections).toEqual([]);
+    expect(result.totalVariables).toBe(0);
+    expect(result.truncated).toBe(false);
+  });
+
+  it('export_node 返回 base64 数据与正确 MIME', async () => {
+    const result = await executeCommand(
+      makeCtx({ selection: [makeNode({ id: '8:8', name: '图标', exportAsync: async () => new Uint8Array([1, 2, 3]) })] }),
+      PLUGIN_VERSION,
+      command('export_node', { format: 'PNG' }),
+    ) as Record<string, unknown>;
+    expect(result).toMatchObject({
+      nodeId: '8:8',
+      nodeName: '图标',
+      format: 'PNG',
+      mimeType: 'image/png',
+      data: Buffer.from([1, 2, 3]).toString('base64'),
+      byteLength: 3,
+      scale: 1,
+    });
+  });
+
+  it('export_node 按 maxDimension 缩小倍率并匹配 SVG MIME', async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const node = makeNode({
+      id: '8:9',
+      exportAsync: async (settings: Record<string, unknown>) => {
+        calls.push(settings);
+        return new Uint8Array([9]);
+      },
+    });
+    const result = await executeCommand(
+      makeCtx({ selection: [node] }),
+      PLUGIN_VERSION,
+      command('export_node', { format: 'SVG', maxDimension: 400 }),
+    ) as Record<string, unknown>;
+    expect(calls[0]).toEqual({ format: 'SVG', constraint: { type: 'SCALE', value: 0.5 } });
+    expect(result.mimeType).toBe('image/svg+xml');
+    expect(result.scale).toBe(0.5);
+  });
+
+  it('export_node 超过 12 MiB 时报错', async () => {
+    const big = makeNode({ exportAsync: async () => new Uint8Array(12 * 1024 * 1024 + 1) });
+    await expect(
+      executeCommand(makeCtx({ selection: [big] }), PLUGIN_VERSION, command('export_node', {})),
+    ).rejects.toThrow(/超过.*限制/);
+  });
+
+  it('未知命令报错', async () => {
+    await expect(executeCommand(makeCtx(), PLUGIN_VERSION, command('run_js'))).rejects.toThrow(/不支持的命令：run_js/);
+  });
+});

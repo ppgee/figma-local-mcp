@@ -13,8 +13,9 @@
 
 ## 目录与职责
 
-- `src/plugin/code.ts`：选区同步、Prompt 生成、插件命令执行和轮询。
+- `src/plugin/code.ts`：插件编排：选区同步、Prompt 生成入口、轮询与命令转发。
 - `src/plugin/ui.html`：独立插件界面，无前端框架或外部资源。
+- `src/plugin/commands.ts`：插件命令执行（选区、结构、变量、导出），figma 上下文注入。
 - `src/plugin/serialize.ts`：设计结构和节点的序列化。
 - `src/plugin/prompt.ts`、`src/plugin/export.ts`：插件纯函数（Prompt 模板、base64 编码、导出倍率计算）。
 - `src/server/index.ts`：MCP 服务入口，装配桥接、工具注册与 stdio 传输。
@@ -23,7 +24,8 @@
 - `src/server/config.ts`：用户数据目录中的本地配置。
 - `src/shared/protocol.ts`：插件与服务端共享的协议类型。
 - `scripts/build.mjs`、`scripts/install.mjs`：构建和本地安装。
-- `tests/`：vitest 单元与集成测试。
+- `tests/`：vitest 单元与集成测试；`vitest.config.ts` 配置覆盖率。
+- `.github/workflows/ci.yml`、`.github/workflows/release.yml`：CI 与 tag 触发的发布。
 - `manifest.json`：Figma 插件入口及网络权限。
 
 ## 工程约定
@@ -33,7 +35,13 @@
 - 沿用现有 TypeScript strict、ESM、esbuild 和文件内代码风格，不为局部修改引入新框架。
 - 不在源码中写死用户目录或机器路径；需要用户目录时沿用 `os.homedir()` 的方式。
 - 协议变更需同时检查 `src/shared/protocol.ts`、插件实现和 `src/server/bridge.ts` 的运行时校验，不能只修改类型。
-- 版本号目前存在于 `package.json`、`scripts/build.mjs` 和 `src/server/index.ts`，版本变更时需同步。
+- 版本号目前存在于 `package.json`、`scripts/build.mjs` 和 `src/server/index.ts`，版本变更时需同步；`tests/version-sync.test.ts` 会校验三处一致。
+
+## 发布与版本
+
+- 发布流程：同步三处版本号 → 合入 `main` → 打 `vX.Y.Z` tag 并推送。
+- `release.yml` 由 `v*` tag 触发：校验 tag 与 `package.json` 版本一致，`pnpm check` 与 `pnpm test` 通过后自动创建 GitHub Release。
+- 禁止把 `dist/` 构建产物附加到 Release 或对外分发：插件产物内嵌本地令牌。
 
 ## 常用命令
 
@@ -44,6 +52,7 @@ pnpm build                     # 构建到 dist/
 pnpm check                     # 类型检查并构建
 pnpm test                      # 运行单元与集成测试
 pnpm test:watch                # 测试 watch 模式
+pnpm test:coverage             # 测试并输出覆盖率
 pnpm install:local             # 构建并安装到本机固定目录
 ```
 
@@ -52,7 +61,7 @@ pnpm install:local             # 构建并安装到本机固定目录
 ## 验证要求
 
 - 源码、构建脚本或依赖变更后运行 `pnpm check`；服务端、序列化或测试相关变更后同时运行 `pnpm test`。纯文档变更不必重复构建。
-- 测试框架为 vitest（仅 devDependency）。单元与集成测试位于 `tests/`，覆盖序列化截断、插件纯函数、配置校验、桥接认证/队列/超时/多实例复用和 MCP 工具层。
+- 测试框架为 vitest（仅 devDependency）。单元与集成测试位于 `tests/`，覆盖序列化截断、插件命令执行、插件纯函数、配置校验、桥接认证/队列/超时/多实例复用、MCP 工具层和版本号同步。
 - 测试通过临时沙箱目录与随机回环端口运行：不得读写真实的 `~/.local/share/figma-local-mcp` 配置与导出目录，不得占用或终止 3846 端口上的现有服务。
 - 插件 UI（`ui.html`）和插件轮询编排（`code.ts` 的 poll 循环与消息处理）不在自动化测试范围，仍需在 Figma 桌面端验证与变更相关的真实场景，包括选区同步、实际粘贴内容、空选/多选和收起状态。构建成功不等于界面验证通过。
 - MCP 改动需通过真实客户端调用相关工具，不能只验证模块导入或服务启动。

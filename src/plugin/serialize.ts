@@ -119,17 +119,20 @@ function serializeNode(
   return result;
 }
 
+export interface DocumentInfo {
+  fileName: string;
+  pageId: string;
+  pageName: string;
+}
+
 export function createDesignContext(
   root: SceneNode,
   options: SerializeOptions,
+  document: DocumentInfo,
 ): Record<string, unknown> {
   const state: SerializeState = { count: 0, truncated: false };
   return {
-    document: {
-      fileName: figma.root.name,
-      pageId: figma.currentPage.id,
-      pageName: figma.currentPage.name,
-    },
+    document,
     root: serializeNode(root, options, state, 0),
     nodesVisited: state.count,
     truncated: state.truncated,

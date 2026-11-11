@@ -91,6 +91,7 @@ pnpm run typecheck  # TypeScript 类型检查
 pnpm run build      # 构建 MCP 服务和插件到 dist/
 pnpm run check      # 类型检查并构建
 pnpm test           # 运行单元与集成测试（vitest）
+pnpm test:coverage  # 运行测试并输出覆盖率报告
 pnpm start          # 通过 stdio 启动 MCP 服务
 ```
 
@@ -102,7 +103,25 @@ pnpm start          # 通过 stdio 启动 MCP 服务
 - `scripts/`：构建和本地安装脚本。
 - `tests/`：单元与集成测试。
 
-单元与集成测试覆盖节点序列化截断、插件纯函数、本地配置校验、桥接认证/命令队列/超时/多实例复用，以及 MCP 工具参数校验与导出落盘。测试使用临时沙箱目录和随机回环端口，不会读写本机真实配置，也不会影响正在运行的服务。插件界面与轮询编排仍需在 Figma 桌面端人工验证。变更后至少运行 `pnpm run check` 与 `pnpm test`，并在 Figma 桌面端验证选区同步、Prompt 复制和 MCP 节点读取。
+单元与集成测试覆盖节点序列化截断、插件命令执行、插件纯函数、本地配置校验、桥接认证/命令队列/超时/多实例复用，以及 MCP 工具参数校验与导出落盘。测试使用临时沙箱目录和随机回环端口，不会读写本机真实配置，也不会影响正在运行的服务。插件界面与轮询编排仍需在 Figma 桌面端人工验证。变更后至少运行 `pnpm run check` 与 `pnpm test`，并在 Figma 桌面端验证选区同步、Prompt 复制和 MCP 节点读取。
+
+## 持续集成与发布
+
+推送到 `main` 或提交 PR 时，GitHub Actions 会自动运行类型检查、构建与测试（`.github/workflows/ci.yml`）。
+
+发布通过打 tag 触发：
+
+```bash
+# 1. 同步更新三处版本号（package.json、scripts/build.mjs、src/server/index.ts）
+# 2. 提交并合入 main
+# 3. 打 tag 并推送
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+推送 `v*` tag 后，`release.yml` 会校验 tag 与 `package.json` 版本一致，跑完 `pnpm check` 与 `pnpm test`，全部通过后自动创建 GitHub Release 并生成变更说明。版本不一致或测试失败时不会发布。
+
+Release 不附带构建产物：插件构建产物内嵌本地令牌，不能对外分发；使用方按 README 从源码安装。
 
 ## 本地数据与安全
 
