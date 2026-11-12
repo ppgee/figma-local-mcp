@@ -1,6 +1,6 @@
 {
   "name": "figma-local-mcp",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Read Figma Desktop designs through a local MCP bridge.",
   "packageManager": "pnpm@9.15.9",
   "private": true,

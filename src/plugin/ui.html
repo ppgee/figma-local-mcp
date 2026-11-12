@@ -51,14 +51,15 @@
       .icon-button { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); transition: background .15s, color .15s; }
       .icon-button:hover { background: var(--surface-secondary); color: var(--text); }
       .lang-button { font-size: 11px; font-weight: 600; }
-      .connection { display: flex; align-items: center; gap: 7px; min-height: 28px; margin-bottom: 12px; padding: 5px 9px; border-radius: 6px; background: var(--surface-secondary); color: var(--text-secondary); font-size: 11px; }
+      .connection { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 7px; min-height: 28px; margin-bottom: 12px; padding: 5px 9px; border-radius: 6px; background: var(--surface-secondary); color: var(--text-secondary); font-size: 11px; }
       .connection[data-state="connected"] { background: var(--success-bg); color: var(--success); }
       .connection[data-state="disconnected"] { background: var(--danger-bg); color: var(--danger); }
       .connection-dot { display: inline-block; flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); }
       .connection-dot[data-state="connected"] { background: #14ae6f; box-shadow: 0 0 0 3px rgba(20, 174, 111, .1); }
       .connection-dot[data-state="disconnected"] { background: #e25555; }
       #retry { margin-left: auto; padding: 0 0 0 8px; border: 0; background: transparent; color: inherit; font-size: 11px; text-decoration: underline; text-underline-offset: 2px; }
-      #connection-hint { flex: 1 1 auto; min-width: 0; overflow: hidden; color: inherit; font-size: 10px; opacity: .78; text-overflow: ellipsis; white-space: nowrap; }
+      #connection-label { flex: 0 0 auto; white-space: nowrap; }
+      #connection-hint { flex: 1 1 100%; color: inherit; font-size: 10px; line-height: 1.45; opacity: .78; white-space: normal; overflow-wrap: anywhere; }
       .selection-card { padding: 13px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
       .section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: var(--text-secondary); font-size: 11px; }
       .live-label { display: inline-flex; align-items: center; gap: 4px; color: var(--text-tertiary); font-size: 10px; }

@@ -2,6 +2,13 @@
 
 Notable changes to this project. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows SemVer. On release, `release.yml` extracts the matching section as the GitHub Release body.
 
+## [0.7.1] - 2026-11-12
+
+### Fixed
+
+- The disconnect reason in the plugin connection banner now wraps on its own full-width line instead of being squeezed into a single truncated line next to the status label.
+- Service-unreachable failures are now reported as "Local service is not running yet." instead of leaking environment-specific fetch errors (e.g. Figma bridge wrappers like "Attempted to invoke callback…"); rejection messages from the service itself are still shown verbatim.
+
 ## [0.7.0] - 2026-11-12
 
 ### Added

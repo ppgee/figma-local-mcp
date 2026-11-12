@@ -85,15 +85,25 @@ function setLocale(locale: Locale, persist: boolean): void {
   });
 }
 
+// Sentinel for fetch-level failures: the local service is unreachable (not
+// running, or the request never got an HTTP response). Environment error
+// strings ("Failed to fetch", Figma bridge wrappers) are useless to users.
+const NETWORK_ERROR = 'figma-local-mcp/network-error';
+
 async function request<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${__BRIDGE_ORIGIN__}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${__BRIDGE_TOKEN__}`,
-    },
-    body: JSON.stringify(body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${__BRIDGE_ORIGIN__}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${__BRIDGE_TOKEN__}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error(NETWORK_ERROR);
+  }
   const payload = await response.json() as T & { error?: string };
   if (!response.ok) throw new Error(payload.error || m().localServiceReturned(response.status));
   return payload;
@@ -131,9 +141,9 @@ async function poll(): Promise<void> {
     if (response.command) void runCommand(response.command);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    // A fetch/network failure means the local service is not reachable; an HTTP
+    // A fetch-level failure means the local service is not reachable; an HTTP
     // error message comes from the service itself and is worth showing as-is.
-    const nextHint = /failed to fetch|networkerror|load failed/i.test(message)
+    const nextHint = message === NETWORK_ERROR
       ? m().serviceUnreachable
       : message.slice(0, 120);
     if (connected || nextHint !== connectionHint) {

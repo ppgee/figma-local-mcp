@@ -35,7 +35,7 @@ if (process.argv.includes('--bridge')) {
   process.once('SIGINT', shutdown);
 } else {
   const bridge = new PluginBridge();
-  const server = new McpServer({ name: 'figma-local-mcp', version: '0.7.0' });
+  const server = new McpServer({ name: 'figma-local-mcp', version: '0.7.1' });
   registerTools(server, bridge);
 
   await bridge.listen();
