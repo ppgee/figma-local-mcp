@@ -157,20 +157,42 @@ export class PluginBridge {
 
   async listen(): Promise<void> {
     try {
-      await new Promise<void>((resolve, reject) => {
-        const onError = (error: Error) => reject(error);
-        this.server.once('error', onError);
-        this.server.listen(this.port, '127.0.0.1', () => {
-          this.server.off('error', onError);
-          resolve();
-        });
-      });
+      await this.listenLocal();
     } catch (error) {
       if (typeof error !== 'object' || error === null || !('code' in error) || error.code !== 'EADDRINUSE') {
         throw error;
       }
       await this.getRemoteStatus();
       this.remoteFallback = true;
+    }
+  }
+
+  private listenLocal(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const onError = (error: Error) => reject(error);
+      this.server.once('error', onError);
+      this.server.listen(this.port, '127.0.0.1', () => {
+        this.server.off('error', onError);
+        resolve();
+      });
+    });
+  }
+
+  /**
+   * For the resident daemon: while reusing another instance, retry binding the
+   * port and take over as soon as it frees. Returns true when this bridge listens.
+   */
+  async tryListen(): Promise<boolean> {
+    if (!this.remoteFallback) return true;
+    try {
+      await this.listenLocal();
+      this.remoteFallback = false;
+      return true;
+    } catch (error) {
+      if (typeof error !== 'object' || error === null || !('code' in error) || error.code !== 'EADDRINUSE') {
+        throw error;
+      }
+      return false;
     }
   }
 

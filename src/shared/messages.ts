@@ -34,6 +34,7 @@ const en = {
   exportLengthCheck: 'Export result failed the length check.',
   screenshotTooLarge: 'Screenshot exceeds 8 MiB; lower maxDimension, or use export_node to save a file instead.',
   missingFileKey: 'Rejected: fileKey is missing. Update the Figma plugin to the same version as the local service, then rerun it.',
+  serviceUnreachable: 'Local service is not running yet.',
   fileNotConnected: (fileKey: string): string =>
     `No connected Figma file matches fileKey "${fileKey}". Call get_plugin_status to list connected files.`,
   fileDisconnected: (fileName: string): string =>
@@ -76,6 +77,7 @@ const zh: MessageCatalog = {
   exportLengthCheck: '导出结果的长度校验失败。',
   screenshotTooLarge: '截图超过 8 MiB，请降低 maxDimension，或改用 export_node 保存文件。',
   missingFileKey: '已拒绝：缺少 fileKey。请将 Figma 插件更新到与本地服务相同的版本后重新运行。',
+  serviceUnreachable: '本地服务尚未启动。',
   fileNotConnected: (fileKey): string =>
     `没有已连接的文件匹配 fileKey「${fileKey}」，请调用 get_plugin_status 查看已连接文件。`,
   fileDisconnected: (fileName): string =>

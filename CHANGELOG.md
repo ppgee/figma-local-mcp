@@ -2,6 +2,15 @@
 
 Notable changes to this project. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows SemVer. On release, `release.yml` extracts the matching section as the GitHub Release body.
 
+## [0.7.0] - 2026-11-12
+
+### Added
+
+- Resident background bridge: `pnpm run install:local` now installs a launchd LaunchAgent (`com.figma-local-mcp.bridge`) that starts the bridge at login and keeps it alive (`KeepAlive`), so the port no longer goes vacant when MCP client sessions exit. MCP processes reuse it through the existing fallback path; the agent is restarted on every install. Logs go to `~/.local/share/figma-local-mcp/bridge.log`.
+- Port takeover: the resident daemon (`figma-local-mcp --bridge`) retries binding every 5 seconds while reusing another instance and takes over the port as soon as the previous holder exits.
+- Plugin disconnect reasons: the connection banner now shows why the plugin is disconnected (local service not running vs a rejected poll with the service's message) instead of a bare "disconnected".
+- Manual retry is now also available in the collapsed mini bar — the connection dot becomes a retry button.
+
 ## [0.6.0] - 2026-11-11
 
 ### Added

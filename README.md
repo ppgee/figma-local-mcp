@@ -34,6 +34,12 @@ The installer creates:
 - Local config: `~/.local/share/figma-local-mcp/config.json`
 - Export directory: `~/.local/share/figma-local-mcp/exports`
 - Figma plugin: `~/figma-local-mcp-app`
+- A resident background bridge (launchd agent `com.figma-local-mcp.bridge`): starts at login and keeps the local service alive, so the plugin stays connected even when no MCP client session is running. MCP processes reuse it. Logs: `~/.local/share/figma-local-mcp/bridge.log`. Stop/start it with:
+
+```bash
+launchctl bootout gui/$UID/com.figma-local-mcp.bridge     # stop
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.figma-local-mcp.bridge.plist  # start
+```
 
 Make sure `~/.local/bin` is on your `PATH`. Moving the source directory does not affect the installed command or plugin.
 

@@ -34,6 +34,12 @@ pnpm run install:local
 - 本地配置：`~/.local/share/figma-local-mcp/config.json`
 - 导出目录：`~/.local/share/figma-local-mcp/exports`
 - Figma 插件：`~/figma-local-mcp-app`
+- 常驻后台桥接服务（launchd 代理 `com.figma-local-mcp.bridge`）：登录自启并保持存活，即使没有任何 MCP 客户端会话在跑，插件也不会掉线；MCP 进程自动复用它。日志：`~/.local/share/figma-local-mcp/bridge.log`。停止/启动：
+
+```bash
+launchctl bootout gui/$UID/com.figma-local-mcp.bridge     # 停止
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.figma-local-mcp.bridge.plist  # 启动
+```
 
 确保 `~/.local/bin` 已加入 `PATH`。移动源码目录不会影响已安装的命令或插件。
 

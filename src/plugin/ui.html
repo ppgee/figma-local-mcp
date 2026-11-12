@@ -58,6 +58,7 @@
       .connection-dot[data-state="connected"] { background: #14ae6f; box-shadow: 0 0 0 3px rgba(20, 174, 111, .1); }
       .connection-dot[data-state="disconnected"] { background: #e25555; }
       #retry { margin-left: auto; padding: 0 0 0 8px; border: 0; background: transparent; color: inherit; font-size: 11px; text-decoration: underline; text-underline-offset: 2px; }
+      #connection-hint { flex: 1 1 auto; min-width: 0; overflow: hidden; color: inherit; font-size: 10px; opacity: .78; text-overflow: ellipsis; white-space: nowrap; }
       .selection-card { padding: 13px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
       .section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: var(--text-secondary); font-size: 11px; }
       .live-label { display: inline-flex; align-items: center; gap: 4px; color: var(--text-tertiary); font-size: 10px; }
@@ -94,6 +95,8 @@
       .local-label { flex: 0 0 auto; }
       #collapsed { align-items: center; gap: 9px; height: 100vh; padding: 10px 12px; }
       #collapsed:not([hidden]) { display: flex; }
+      #compact-retry { display: grid; place-items: center; flex: 0 0 auto; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: transparent; }
+      #compact-retry:hover { background: var(--surface-secondary); }
       .compact-node { flex: 1; min-width: 0; }
       #compact-node-name { display: block; overflow: hidden; font-size: 12px; line-height: 18px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
       #compact-node-detail { display: block; overflow: hidden; color: var(--text-tertiary); font-size: 9px; line-height: 13px; text-overflow: ellipsis; white-space: nowrap; }
@@ -132,6 +135,7 @@
       <div id="connection" class="connection" data-state="connecting" role="status">
         <span class="connection-dot" data-connection-dot data-state="connecting"></span>
         <span id="connection-label"></span>
+        <span id="connection-hint" hidden></span>
         <button id="retry" type="button" hidden></button>
       </div>
 
@@ -164,7 +168,7 @@
     </main>
 
     <section id="collapsed" hidden>
-      <span class="connection-dot" data-connection-dot data-state="connecting"></span>
+      <button id="compact-retry" type="button"><span class="connection-dot" data-connection-dot data-state="connecting"></span></button>
       <div class="compact-node"><span id="compact-node-name"></span><span id="compact-node-detail"></span></div>
       <button id="compact-copy" type="button" disabled></button>
       <button id="expand-window" class="icon-button" type="button"><svg class="icon"><use href="#icon-expand"/></svg></button>
@@ -279,7 +283,7 @@
           },
         };
 
-        const state = { ready: false, connected: false, collapsed: false, fileName: '', pageName: '', selectionCount: 0, selectedNode: null, prompt: '' };
+        const state = { ready: false, connected: false, connectionHint: '', collapsed: false, fileName: '', pageName: '', selectionCount: 0, selectedNode: null, prompt: '' };
         const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
         let localeOverride = null; // 'zh' | 'en' | null, set by the plugin main thread
         let locale = 'en'; // effective locale, kept in sync with the plugin main thread
@@ -342,6 +346,8 @@
           $('manual-prefix').textContent = t('manualPrefix');
           $('manual-suffix').textContent = t('manualSuffix');
           $('local-label').textContent = t('noQuota');
+          $('compact-retry').title = t('retry');
+          $('compact-retry').setAttribute('aria-label', t('retry'));
           $('collapsed').setAttribute('aria-label', t('collapsedAria'));
         }
 
@@ -411,6 +417,11 @@
           $('connection-label').textContent = state.connected
             ? t('connected')
             : (state.ready ? t('disconnected') : t('connecting'));
+          const hint = $('connection-hint');
+          const hintText = !state.connected && state.ready ? state.connectionHint : '';
+          hint.textContent = hintText;
+          hint.hidden = !hintText;
+          hint.title = hintText;
           $('retry').hidden = state.connected || !state.ready;
           document.querySelectorAll('[data-connection-dot]').forEach((dot) => {
             dot.dataset.state = connectionState;
@@ -519,6 +530,7 @@
             const previousNodeId = state.selectedNode && state.selectedNode.id;
             state.ready = true;
             state.connected = message.connected;
+            state.connectionHint = message.connectionHint || '';
             state.fileName = message.fileName || '';
             state.pageName = message.pageName || '';
             state.selectionCount = message.selectionCount;
@@ -564,6 +576,7 @@
             $('retry').textContent = t('retry');
           }, 1200);
         });
+        $('compact-retry').addEventListener('click', () => send('retry'));
         $('collapse-window').addEventListener('click', () => send('set-view', { collapsed: true }));
         $('expand-window').addEventListener('click', () => send('set-view', { collapsed: false }));
         $('manual-prompt').addEventListener('focus', () => $('manual-prompt').select());

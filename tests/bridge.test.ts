@@ -497,4 +497,29 @@ describe('multi-instance reuse', () => {
       await primary.close();
     }
   });
+
+  it('a reusing daemon takes over the port once the primary exits', async () => {
+    const token = 'g'.repeat(64);
+    const primary = new PluginBridge({ port: 0, token });
+    await primary.listen();
+    const port = primary.boundPort;
+    if (port === null) throw new Error('Failed to obtain the listening port.');
+
+    const daemon = new PluginBridge({ port, token });
+    await daemon.listen();
+    expect(daemon.connectionMode).toBe('reusing');
+    expect(await daemon.tryListen()).toBe(false);
+
+    await primary.close();
+    expect(await daemon.tryListen()).toBe(true);
+    expect(daemon.connectionMode).toBe('listening');
+    expect(await daemon.tryListen()).toBe(true);
+
+    const origin = `http://localhost:${port}`;
+    const response = await api(origin, '/v1/plugin/poll', { method: 'POST', body: documentStatus(), token });
+    expect(response.status).toBe(200);
+    expect(response.body.command).toBeNull();
+
+    await daemon.close();
+  });
 });

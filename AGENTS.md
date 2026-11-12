@@ -18,14 +18,14 @@ This file defines how the repository is developed and verified. Installation, ag
 - `src/plugin/commands.ts`: plugin command execution (selection, structure, variables, styles, document/search, exports) with an injected Figma context.
 - `src/plugin/serialize.ts`: serialization of the design structure and nodes.
 - `src/plugin/prompt.ts`, `src/plugin/export.ts`: plugin pure helpers (prompt template, base64 encoding, export scale computation).
-- `src/server/index.ts`: MCP service entry — assembles the bridge, tool registration and stdio transport.
+- `src/server/index.ts`: MCP service entry — assembles the bridge, tool registration and stdio transport; `--bridge` runs the resident daemon (bridge only, with port takeover).
 - `src/server/tools.ts`: MCP tool registration, parameter validation and export file writing.
-- `src/server/bridge.ts`: local HTTP bridge, auth, per-file sessions, command routing and connection state; port and token are injectable via `BridgeOptions` (defaults come from local config).
+- `src/server/bridge.ts`: local HTTP bridge, auth, per-file sessions, command routing and connection state; port and token are injectable via `BridgeOptions` (defaults come from local config); `tryListen()` lets a reusing daemon take over the port.
 - `src/server/config.ts`: local configuration in the user data directory.
 - `src/shared/protocol.ts`: protocol types shared by plugin and server.
 - `src/shared/messages.ts`: bilingual runtime message catalog (single source for localized strings).
 - `src/plugin/i18n.ts`: locale resolution helper.
-- `scripts/build.mjs`, `scripts/install.mjs`: build and local install.
+- `scripts/build.mjs`, `scripts/install.mjs`: build and local install. The installer also (re)starts the launchd LaunchAgent `com.figma-local-mcp.bridge`, which runs the bridge daemon (`--bridge`) at login with `KeepAlive`.
 - `tests/`: vitest unit and integration tests; `vitest.config.ts` configures coverage.
 - `.github/workflows/ci.yml`, `.github/workflows/release.yml`: CI and tag-triggered releases.
 - `manifest.json`: Figma plugin entry and network permissions.
@@ -81,6 +81,7 @@ pnpm install:local             # Build and install into the fixed local director
 - Update the UI promptly after `selectionchange` and `currentpagechange`.
 - Stay connected and copyable while collapsed; hiding or closing the plugin window is not a substitute for collapsing.
 - Keep `Cmd/Ctrl + Shift + C` working and keep the manual copy fallback available when automatic copy fails.
+- While disconnected, the connection banner shows the reason (service unreachable vs the service's rejection message) and offers manual retry — in the expanded view via the "Retry" button and in the collapsed mini bar via the connection dot.
 - The manifest uses `documentAccess: "dynamic-page"`: tools that touch other pages (`find_nodes`, `get_document`) must `await page.loadAsync()` before reading a page's children; the current page and `getNodeByIdAsync` are always available.
 
 ## Local data and security
@@ -88,7 +89,7 @@ pnpm install:local             # Build and install into the fixed local director
 - The real token lives in `~/.local/share/figma-local-mcp/config.json`; never print, document or commit it.
 - Plugin build artifacts under `dist/` embed the token; they must stay Git-ignored — never force-add them.
 - Local exports are written to `~/.local/share/figma-local-mcp/exports`; never commit export contents.
-- The local install uses `~/figma-local-mcp-app` and `~/.local/bin/figma-local-mcp`; moving the source directory must not affect the installed command.
+- The local install uses `~/figma-local-mcp-app` and `~/.local/bin/figma-local-mcp`; moving the source directory must not affect the installed command. The resident bridge runs as the launchd agent `com.figma-local-mcp.bridge` and logs to `~/.local/share/figma-local-mcp/bridge.log` (never log or commit the token).
 - The bridge listens on the loopback interface only; do not widen network exposure or relax token validation.
 
 ## Documentation sync

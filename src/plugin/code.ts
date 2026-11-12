@@ -17,6 +17,7 @@ const LOCALE_STORAGE_KEY = 'ui-locale';
 const fileKey = figma.fileKey
   || `draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 let connected = false;
+let connectionHint = '';
 let polling = false;
 let executing = false;
 let collapsed = false;
@@ -33,6 +34,7 @@ function emitStatus(): void {
   figma.ui.postMessage({
     type: 'status',
     connected,
+    connectionHint,
     ...status,
     prompt: status.selectedNode ? createNodePrompt(status.selectedNode, fileKey, uiLocale) : '',
   });
@@ -121,14 +123,22 @@ async function poll(): Promise<void> {
   polling = true;
   try {
     const response = await request<{ command: PluginCommand | null }>('/v1/plugin/poll', readDocumentStatus(figma, fileKey, __PLUGIN_VERSION__, uiLocale));
+    connectionHint = '';
     if (!connected) {
       connected = true;
       emitStatus();
     }
     if (response.command) void runCommand(response.command);
-  } catch {
-    if (connected) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // A fetch/network failure means the local service is not reachable; an HTTP
+    // error message comes from the service itself and is worth showing as-is.
+    const nextHint = /failed to fetch|networkerror|load failed/i.test(message)
+      ? m().serviceUnreachable
+      : message.slice(0, 120);
+    if (connected || nextHint !== connectionHint) {
       connected = false;
+      connectionHint = nextHint;
       emitStatus();
     }
   } finally {
